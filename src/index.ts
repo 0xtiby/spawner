@@ -19,6 +19,6 @@ export type {
 export { KNOWN_MODELS, getKnownModels, listModels } from './models.js';
 
 export { detect, detectAll } from './core/detect.js';
-// TODO: export { spawn } from './core/spawn.js';
+export { spawn } from './core/spawn.js';
 // TODO: export { extract } from './core/extract.js';
 // TODO: export { classifyError } from './core/errors.js';
