@@ -24,9 +24,13 @@ describe('getAdapter', () => {
   for (const name of stubNames) {
     it(`${name} adapter unimplemented methods throw`, () => {
       const adapter = getAdapter(name);
-      expect(() => adapter.buildCommand({} as any)).toThrow(`${name} adapter buildCommand not implemented`);
       expect(() => adapter.parseLine('', {} as any)).toThrow(`${name} adapter parseLine not implemented`);
       expect(() => adapter.classifyError(1, '', '')).toThrow(`${name} adapter classifyError not implemented`);
     });
   }
+
+  it('opencode adapter buildCommand throws (not yet implemented)', () => {
+    const adapter = getAdapter('opencode');
+    expect(() => adapter.buildCommand({} as any)).toThrow('opencode adapter buildCommand not implemented');
+  });
 });

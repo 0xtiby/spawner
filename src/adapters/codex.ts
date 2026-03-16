@@ -1,4 +1,4 @@
-import type { DetectResult } from '../types.js';
+import type { DetectResult, SpawnOptions } from '../types.js';
 import type { CliAdapter, SessionAccumulator } from './types.js';
 import { execCommand } from '../core/detect.js';
 import type { ExecResult } from '../core/detect.js';
@@ -28,8 +28,52 @@ export const codexAdapter: CliAdapter = {
     return { installed: true, version, authenticated, binaryPath: 'codex' };
   },
 
-  buildCommand() {
-    throw new Error('codex adapter buildCommand not implemented');
+  buildCommand(options: SpawnOptions) {
+    const isFork = options.forkSession && options.sessionId;
+    const isResumeById = options.sessionId && !options.forkSession;
+    const isResumeLast = !options.sessionId && options.continueSession;
+
+    const args: string[] = [];
+    let stdinInput: string | undefined = options.prompt;
+
+    if (isFork) {
+      args.push('fork', options.sessionId!);
+      stdinInput = undefined;
+    } else if (isResumeById) {
+      args.push('exec', 'resume', options.sessionId!);
+    } else if (isResumeLast) {
+      args.push('exec', 'resume', '--last');
+    } else {
+      args.push('exec', '--json');
+    }
+
+    if (options.model) {
+      args.push('--model', options.model);
+    }
+
+    if (options.autoApprove) {
+      args.push('--full-auto');
+    }
+
+    if (options.addDirs) {
+      for (const dir of options.addDirs) {
+        args.push('--add-dir', dir);
+      }
+    }
+
+    if (options.ephemeral) {
+      args.push('--ephemeral');
+    }
+
+    if (options.effort) {
+      args.push('-c', `model_reasoning_effort=${options.effort}`);
+    }
+
+    if (options.extraArgs) {
+      args.push(...options.extraArgs);
+    }
+
+    return { bin: 'codex', args, stdinInput };
   },
 
   parseLine(_line: string, _accumulator: SessionAccumulator) {

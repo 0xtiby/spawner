@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ExecResult, ExecError } from '../core/detect.js';
+import type { SpawnOptions } from '../types.js';
 
 vi.mock('../core/detect.js', () => ({
   execCommand: vi.fn(),
@@ -7,6 +8,8 @@ vi.mock('../core/detect.js', () => ({
 
 import { execCommand } from '../core/detect.js';
 import { codexAdapter } from './codex.js';
+
+const baseOptions: SpawnOptions = { cli: 'codex', prompt: 'hello', cwd: '/tmp' };
 
 const mockExecCommand = vi.mocked(execCommand);
 
@@ -98,5 +101,113 @@ describe('codexAdapter.detect', () => {
       authenticated: false,
       binaryPath: 'codex',
     });
+  });
+});
+
+describe('codexAdapter.buildCommand', () => {
+  it('returns exec --json for new session', () => {
+    const result = codexAdapter.buildCommand(baseOptions);
+    expect(result).toEqual({
+      bin: 'codex',
+      args: ['exec', '--json'],
+      stdinInput: 'hello',
+    });
+  });
+
+  it('returns exec resume <id> for resume by sessionId', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, sessionId: 'sess-123' });
+    expect(result.args[0]).toBe('exec');
+    expect(result.args[1]).toBe('resume');
+    expect(result.args[2]).toBe('sess-123');
+    expect(result.args).not.toContain('--json');
+  });
+
+  it('returns exec resume --last for continueSession', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, continueSession: true });
+    expect(result.args[0]).toBe('exec');
+    expect(result.args[1]).toBe('resume');
+    expect(result.args[2]).toBe('--last');
+    expect(result.args).not.toContain('--json');
+  });
+
+  it('returns fork <id> for forkSession + sessionId', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, forkSession: true, sessionId: 'sess-123' });
+    expect(result.args[0]).toBe('fork');
+    expect(result.args[1]).toBe('sess-123');
+    expect(result.stdinInput).toBeUndefined();
+  });
+
+  it('fork mode ignores prompt (stdinInput undefined)', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, prompt: 'ignored', forkSession: true, sessionId: 'sess-123' });
+    expect(result.stdinInput).toBeUndefined();
+  });
+
+  it('forkSession + continueSession (no sessionId) resolves to resume-last', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, forkSession: true, continueSession: true });
+    expect(result.args[0]).toBe('exec');
+    expect(result.args[1]).toBe('resume');
+    expect(result.args[2]).toBe('--last');
+    expect(result.args).not.toContain('fork');
+  });
+
+  it('forkSession alone (no sessionId, no continueSession) falls through to new session', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, forkSession: true });
+    expect(result.args[0]).toBe('exec');
+    expect(result.args[1]).toBe('--json');
+  });
+
+  it('sessionId takes precedence over continueSession', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, sessionId: 'sess-123', continueSession: true });
+    expect(result.args).toContain('resume');
+    expect(result.args).toContain('sess-123');
+    expect(result.args).not.toContain('--last');
+  });
+
+  it('maps model flag', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, model: 'o3' });
+    expect(result.args).toContain('--model');
+    expect(result.args).toContain('o3');
+  });
+
+  it('maps autoApprove to --full-auto', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, autoApprove: true });
+    expect(result.args).toContain('--full-auto');
+  });
+
+  it('maps addDirs to multiple --add-dir flags', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, addDirs: ['/a', '/b'] });
+    const addDirIndices = result.args.reduce<number[]>((acc, arg, i) => {
+      if (arg === '--add-dir') acc.push(i);
+      return acc;
+    }, []);
+    expect(addDirIndices).toHaveLength(2);
+    expect(result.args[addDirIndices[0] + 1]).toBe('/a');
+    expect(result.args[addDirIndices[1] + 1]).toBe('/b');
+  });
+
+  it('maps ephemeral to --ephemeral', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, ephemeral: true });
+    expect(result.args).toContain('--ephemeral');
+  });
+
+  it('maps effort to -c model_reasoning_effort=<value>', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, effort: 'high' });
+    expect(result.args).toContain('-c');
+    expect(result.args).toContain('model_reasoning_effort=high');
+  });
+
+  it('appends extraArgs at the end', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, extraArgs: ['--yolo'] });
+    expect(result.args[result.args.length - 1]).toBe('--yolo');
+  });
+
+  it('delivers prompt via stdinInput for exec mode', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, prompt: 'do something' });
+    expect(result.stdinInput).toBe('do something');
+  });
+
+  it('delivers prompt via stdinInput for resume mode', () => {
+    const result = codexAdapter.buildCommand({ ...baseOptions, sessionId: 'sess-123', prompt: 'follow up' });
+    expect(result.stdinInput).toBe('follow up');
   });
 });
