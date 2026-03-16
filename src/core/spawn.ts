@@ -4,20 +4,15 @@ import type { SpawnOptions, CliProcess, CliResult, CliEvent } from '../types.js'
 import { getAdapter } from '../adapters/index.js';
 import { createStream } from './stream.js';
 import { EventQueue } from './event-queue.js';
-
-const debug = process.env.NODE_DEBUG?.includes('spawner')
-  ? (msg: string) => process.stderr.write(`[spawner] ${msg}\n`)
-  : null;
+import { createDebugLogger } from './debug.js';
 
 export function spawn(options: SpawnOptions): CliProcess {
   const adapter = getAdapter(options.cli);
   const { bin, args, stdinInput } = adapter.buildCommand(options);
   const startTime = Date.now();
+  const log = createDebugLogger(options.verbose);
 
-  if (options.verbose || debug) {
-    const log = debug ?? ((msg: string) => process.stderr.write(`[spawner] ${msg}\n`));
-    log(`spawn: ${bin} ${args.join(' ')}`);
-  }
+  log?.(`spawn: ${bin} ${args.join(' ')}`);
 
   const queue = new EventQueue();
 
@@ -70,11 +65,11 @@ export function spawn(options: SpawnOptions): CliProcess {
   // Pipe stream events into the queue (continues even if consumer abandons iterator)
   const pipePromise = (async () => {
     for await (const event of streamEvents) {
-      if (options.verbose || debug) {
-        const log = debug ?? ((msg: string) => process.stderr.write(`[spawner] ${msg}\n`));
+      if (log) {
         if (event.type === 'system') {
           log(`stderr: ${event.content}`);
         } else {
+          if (event.raw) log(`raw: ${event.raw}`);
           log(`event: ${event.type} (${event.content?.length ?? 0} chars)`);
         }
       }
@@ -124,10 +119,7 @@ export function spawn(options: SpawnOptions): CliProcess {
       await pipePromise;
       const { accumulator, stderr } = await streamResult;
 
-      if (options.verbose || debug) {
-        const log = debug ?? ((msg: string) => process.stderr.write(`[spawner] ${msg}\n`));
-        log(`exit: code=${code} duration=${Date.now() - startTime}ms`);
-      }
+      log?.(`exit: code=${code} duration=${Date.now() - startTime}ms`);
 
       const error = code !== 0 ? adapter.classifyError(code, stderr, '') : null;
 
