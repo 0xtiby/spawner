@@ -1,0 +1,5 @@
+{"type":"tool_use","name":"read_file","input":{"path":"/src/index.ts"}}
+{"type":"tool_result","name":"read_file","output":"export function main() {}","is_error":false}
+{"type":"tool_result","name":"write_file","output":"permission denied","is_error":true}
+{"type":"text","content":"I read the file for you."}
+{"type":"step_finish","session_id":"sess-oc-002","model":"gpt-4o","usage":{"input_tokens":100,"output_tokens":25},"cost":0.002}
