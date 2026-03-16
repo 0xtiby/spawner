@@ -160,17 +160,21 @@ export function spawn(options: SpawnOptions): CliProcess {
   });
 
   // AbortSignal handling
-  let onAbort: (() => void) | undefined;
   if (options.abortSignal) {
-    onAbort = () => interruptFn();
-    options.abortSignal.addEventListener('abort', onAbort, { once: true });
+    if (options.abortSignal.aborted) {
+      // Signal already aborted — fire interrupt immediately
+      interruptFn();
+    } else {
+      const onAbort = () => interruptFn();
+      options.abortSignal.addEventListener('abort', onAbort, { once: true });
 
-    // Clean up listener when process exits
-    done.then(() => {
-      options.abortSignal!.removeEventListener('abort', onAbort!);
-    }).catch(() => {
-      options.abortSignal!.removeEventListener('abort', onAbort!);
-    });
+      // Clean up listener when process exits
+      done.then(() => {
+        options.abortSignal!.removeEventListener('abort', onAbort);
+      }).catch(() => {
+        options.abortSignal!.removeEventListener('abort', onAbort);
+      });
+    }
   }
 
   async function interruptFn(graceMs = 5000): Promise<CliResult> {
