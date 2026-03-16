@@ -1,0 +1,5 @@
+{"type":"system","session_id":"sess-tool-456","model":"claude-sonnet-4-20250514"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Let me read that file for you."},{"type":"tool_use","name":"read_file","input":{"path":"/src/index.ts"}}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_result","name":"read_file","content":"export function main() {}","is_error":false}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"The file contains a main function export."}]}}
+{"type":"result","session_id":"sess-tool-456","model":"claude-sonnet-4-20250514","usage":{"input_tokens":150,"output_tokens":80},"cost_usd":0.0015}
