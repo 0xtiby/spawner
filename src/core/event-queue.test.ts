@@ -70,12 +70,43 @@ describe('EventQueue', () => {
 
     // After break, push is discarded
     q.push(makeEvent('4'));
-    // Queue is closed, iterating again yields nothing
+    // Queue is abandoned, iterating again yields nothing
     const after: CliEvent[] = [];
     for await (const event of q) {
       after.push(event);
     }
     expect(after).toEqual([]);
+  });
+
+  it('sets abandoned flag on iterator return', async () => {
+    const q = new EventQueue();
+    q.push(makeEvent('a'));
+    q.push(makeEvent('b'));
+
+    expect(q.abandoned).toBe(false);
+
+    for await (const event of q) {
+      if (event.content === 'a') break;
+    }
+
+    expect(q.abandoned).toBe(true);
+  });
+
+  it('push is no-op after abandonment (no memory leak)', () => {
+    const q = new EventQueue();
+
+    // Simulate abandonment by getting iterator and calling return
+    const iter = q[Symbol.asyncIterator]();
+    iter.return!();
+
+    expect(q.abandoned).toBe(true);
+
+    // Pushing after abandonment should not accumulate
+    q.push(makeEvent('leak1'));
+    q.push(makeEvent('leak2'));
+
+    // close() still works (does not throw)
+    q.close();
   });
 
   it('resolves immediately when consumer is already waiting', async () => {
