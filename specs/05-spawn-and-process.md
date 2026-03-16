@@ -61,21 +61,31 @@ spawn() called
 const child = child_process.spawn(bin, args, {
   cwd: options.cwd,
   stdio: ['pipe', 'pipe', 'pipe'],
+  env: process.env,  // Inherit full environment — CLIs need PATH, API keys, etc.
   // No shell: true — spawn the binary directly
 });
 ```
 
+### Environment Variables
+
+Always pass `process.env` (the default). CLI tools depend on environment variables for:
+- `PATH` — binary resolution
+- API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.)
+- CLI config (`CLAUDE_CONFIG_DIR`, etc.)
+
+No `env` override option is exposed — consumers who need custom env can set `process.env` before calling `spawn()`.
+
 ### ENOENT Handling
 
-If `child_process.spawn` emits an `error` event with `code: 'ENOENT'`, `spawn()` throws synchronously (before returning `CliProcess`).
-
-Implementation: since `child_process.spawn` is itself synchronous but the ENOENT error arrives asynchronously on the next tick, we need to handle this carefully. Use a microtask check:
+`child_process.spawn()` is synchronous, but the ENOENT error arrives asynchronously (next tick). `spawn()` cannot throw synchronously for ENOENT. Instead:
 
 1. Call `child_process.spawn()`
 2. Listen for the `error` event on the child
-3. If ENOENT fires, reject `done` with a `CliError` of code `binary_not_found` and also cause the event iterator to throw
+3. If ENOENT fires:
+   - Reject `done` with a `CliError` of code `binary_not_found`
+   - Close the event iterator with the same error (iterating `events` will throw)
 
-Since true synchronous throw isn't possible with async ENOENT, the practical behavior is: `done` rejects, and iterating `events` throws. The consumer sees the error whichever way they consume.
+The consumer sees the error whichever way they consume — either `done` rejects or `for await (const event of proc.events)` throws.
 
 ### Stdin Delivery
 
@@ -158,6 +168,52 @@ The `done` event is also emitted through the events iterator as the final event 
 
 ---
 
+## Resource Cleanup
+
+### AbortSignal Listener
+
+If `options.abortSignal` is provided, the `abort` listener must be removed after the process exits to avoid memory leaks:
+
+```typescript
+const onAbort = () => interrupt();
+options.abortSignal.addEventListener('abort', onAbort, { once: true });
+
+// On process exit:
+options.abortSignal.removeEventListener('abort', onAbort);
+```
+
+### Early Iterator Abandonment
+
+If the consumer breaks out of `for await (const event of proc.events)` before the process exits (e.g., `break`, `return`, or throwing), the async iterator's `return()` method is called. Handle this by:
+
+1. **Do not kill the process** — the consumer may still await `done` for the final result
+2. Stop pushing events to the queue (discard them)
+3. The process continues running; `done` still resolves normally
+
+If the consumer wants to stop the process, they should call `interrupt()` explicitly.
+
+### Readline Cleanup
+
+Close the `readline` interface when the process exits to release the stdout stream reference.
+
+---
+
+## Edge Cases
+
+### Empty Prompt
+
+If `options.prompt` is an empty string, still write it to stdin and close. The CLI will receive empty input — behavior is CLI-specific (most will return an error or empty response). Do not validate or reject empty prompts.
+
+### Nonexistent cwd
+
+If `options.cwd` does not exist, `child_process.spawn()` will emit an error event (ENOENT or ENOTDIR depending on OS). Handle the same as binary ENOENT — reject `done` with `{ code: 'fatal', message: 'working directory not found' }`.
+
+### Concurrent Spawns
+
+Multiple `spawn()` calls are independent and safe to run concurrently. Each creates its own child process, accumulator, event queue, and readline instance. No shared mutable state.
+
+---
+
 ## Debug Logging
 
 When `verbose: true` OR `NODE_DEBUG=spawner` is set:
@@ -186,3 +242,7 @@ Check `NODE_DEBUG` via: `process.env.NODE_DEBUG?.includes('spawner')`.
 - Given `verbose: true`, when the process runs, then command, raw lines, parsed events, and stderr are logged to process.stderr
 - Given the process completes, when `done` resolves, then `durationMs` reflects wall-clock time from spawn to exit
 - Given events are iterated with for-await, when the process exits, then the iterator completes (no hang)
+- Given an AbortSignal is provided, when the process exits normally, then the abort listener is removed
+- Given the consumer breaks out of for-await early, when the process is still running, then `done` still resolves with the final result
+- Given `cwd` does not exist, when `spawn()` is called, then `done` rejects with a `CliError` of code `fatal`
+- Given multiple `spawn()` calls run concurrently, when they complete, then each produces independent results with no cross-contamination

@@ -121,12 +121,32 @@ Raw output format: NDJSON with `type` field.
 
 ### Parsing logic
 
-Parse each line as JSON. Match on the `type` field pattern:
+```
+for each line:
+  json = JSON.parse(line)
+  switch json.type:
+    'item.started':
+      if json.item?.type === 'function_call':
+        emit { type: 'tool_use', tool: { name: json.item.name, input: JSON.parse(json.item.arguments ?? '{}') }, raw: line }
 
-- `item.started` → check for `function_call` in the item, emit `tool_use`
-- `item.completed` → check content type, emit `text` or `tool_result`
-- Lines with token/usage data → update accumulator
-- Session ID → extract from transcript metadata if available
+    'item.completed':
+      if json.item?.type === 'function_call_output':
+        emit { type: 'tool_result', toolResult: { name: json.item.call_id, output: json.item.output, error: json.item.status === 'error' ? json.item.output : undefined }, raw: line }
+      if json.item?.type === 'message' && json.item.role === 'assistant':
+        for each block in (json.item.content ?? []):
+          if block.type === 'output_text':
+            emit { type: 'text', content: block.text, raw: line }
+
+    'response.completed':
+      accumulator.inputTokens += json.response?.usage?.input_tokens ?? 0
+      accumulator.outputTokens += json.response?.usage?.output_tokens ?? 0
+      // Codex does not report cost or session ID in stream output
+
+    'error':
+      emit { type: 'error', content: json.message ?? json.error ?? 'unknown error', raw: line }
+```
+
+Note: Codex does not emit session ID or model in its NDJSON stream. `accumulator.sessionId` and `accumulator.model` remain at their initial values (null) unless extracted from transcript metadata in a future Codex version.
 
 ---
 
@@ -146,7 +166,30 @@ Raw output format: JSONL with `type` field that maps almost directly.
 
 ### Parsing logic
 
-Mostly 1:1 mapping. Extract session ID from `step_finish` or initial output.
+```
+for each line:
+  json = JSON.parse(line)
+  switch json.type:
+    'text':
+      emit { type: 'text', content: json.content ?? json.text, raw: line }
+
+    'tool_use':
+      emit { type: 'tool_use', tool: { name: json.name, input: json.input ?? {} }, raw: line }
+
+    'tool_result':
+      emit { type: 'tool_result', toolResult: { name: json.name, output: json.output, error: json.is_error ? json.output : undefined }, raw: line }
+
+    'step_finish':
+      accumulator.sessionId = json.session_id ?? accumulator.sessionId
+      accumulator.model = json.model ?? accumulator.model
+      accumulator.inputTokens += json.usage?.input_tokens ?? 0
+      accumulator.outputTokens += json.usage?.output_tokens ?? 0
+      accumulator.cost = json.cost ?? accumulator.cost
+      emit { type: 'system', content: 'step_finish', raw: line }
+
+    'error':
+      emit { type: 'error', content: json.message ?? json.error ?? 'unknown error', raw: line }
+```
 
 ---
 

@@ -39,7 +39,7 @@ Errors are classified by matching regex patterns against stderr and stdout. Patt
 
 | Code | Patterns (case-insensitive) | Retryable | retryAfterMs |
 |------|----------------------------|-----------|--------------|
-| `rate_limit` | `rate limit`, `too many requests`, `429`, `try again`, `overloaded` | `true` | `60000` |
+| `rate_limit` | `rate limit`, `too many requests`, `429`, `try again`, `overloaded` | `true` | parsed or `60000` |
 | `auth` | `not authenticated`, `login`, `sign in`, `401`, `unauthorized`, `auth` | `false` | `null` |
 | `session_not_found` | `session not found`, `no such session`, `invalid session` | `false` | `null` |
 | `model_not_found` | `model not found`, `unknown model`, `invalid model` | `false` | `null` |
@@ -52,6 +52,22 @@ Each adapter may add CLI-specific patterns or adjust the shared patterns. For ex
 
 - **Claude:** `auth` also matches exit code 1 from `claude auth status`
 - **Codex:** `permission_denied` matches when the process appears to hang waiting for stdin approval (detected by timeout + no output)
+
+### Retry-After Parsing
+
+For `rate_limit` errors, attempt to extract a retry delay from the stderr/stdout text:
+
+1. Match patterns like `retry after (\d+) seconds`, `try again in (\d+)s`, `wait (\d+) seconds`
+2. If a numeric value is found, convert to milliseconds and use as `retryAfterMs`
+3. If no value is found, default to `60000` ms (1 minute)
+
+```typescript
+function parseRetryAfterMs(text: string): number {
+  const match = text.match(/(?:retry|try|wait).*?(\d+)\s*(?:s(?:ec(?:ond)?s?)?)/i);
+  if (match) return parseInt(match[1], 10) * 1000;
+  return 60_000; // default
+}
+```
 
 ### Fallback
 
@@ -91,3 +107,5 @@ The `message` field should be concise — extract the most relevant line from st
 - Given an ENOENT spawn error, when the error is classified, then it returns `{ code: 'binary_not_found' }`
 - Given stderr contains multiple matching patterns, when `classifyError()` is called, then the first match in priority order wins
 - Given the `raw` field, when the error is returned, then it contains the full stderr + stdout concatenated
+- Given stderr contains "rate limit exceeded, retry after 30 seconds", when `classifyError()` is called, then `retryAfterMs` is `30000`
+- Given stderr contains "rate limit" with no retry hint, when `classifyError()` is called, then `retryAfterMs` defaults to `60000`
