@@ -155,9 +155,8 @@ interface ExtractOptions {
 }
 
 interface ListModelsOptions {
-  cli: CliName;
-  provider?: string;
-  refresh?: boolean;
+  cli?: CliName;       // Filter to models supported by this CLI. Omit for all CLIs.
+  provider?: string;   // Filter to models from this provider ('anthropic', 'openai', 'other').
 }
 
 interface KnownModel {
@@ -285,6 +284,56 @@ function getKnownModels(cli?: CliName): KnownModel[] {
 
 ---
 
+## listModels (src/models.ts)
+
+Synchronous filter over the static `KNOWN_MODELS` registry. This is a convenience wrapper — it does **not** shell out to any CLI or fetch models dynamically.
+
+```typescript
+function listModels(options?: ListModelsOptions): KnownModel[] {
+  let models = KNOWN_MODELS;
+  if (options?.cli) {
+    models = models.filter(m => m.cli.includes(options.cli!));
+  }
+  if (options?.provider) {
+    models = models.filter(m => m.provider === options.provider);
+  }
+  return models;
+}
+```
+
+- `listModels()` → all known models
+- `listModels({ cli: 'claude' })` → models supported by Claude Code
+- `listModels({ provider: 'openai' })` → all OpenAI models across CLIs
+- `listModels({ cli: 'codex', provider: 'openai' })` → OpenAI models for Codex
+
+---
+
+## Adapter Registry (src/adapters/index.ts)
+
+Maps `CliName` to the corresponding adapter instance. Used by all core functions (`spawn`, `detect`, `classifyError`, `extract`).
+
+```typescript
+import { claudeAdapter } from './claude';
+import { codexAdapter } from './codex';
+import { opencodeAdapter } from './opencode';
+import type { CliAdapter } from './types';
+import type { CliName } from '../types';
+
+const adapters: Record<CliName, CliAdapter> = {
+  claude: claudeAdapter,
+  codex: codexAdapter,
+  opencode: opencodeAdapter,
+};
+
+function getAdapter(cli: CliName): CliAdapter {
+  return adapters[cli];
+}
+```
+
+No validation needed — `CliName` is a union type, so TypeScript enforces valid keys at compile time.
+
+---
+
 ## Package Exports (src/index.ts)
 
 ```typescript
@@ -303,7 +352,7 @@ export type {
 } from './types';
 
 // Registry
-export { KNOWN_MODELS, getKnownModels } from './models';
+export { KNOWN_MODELS, getKnownModels, listModels } from './models';
 ```
 
 ---
@@ -313,4 +362,7 @@ export { KNOWN_MODELS, getKnownModels } from './models';
 - Given a consumer imports from `spawner`, when they access any public type, then it is available and correctly typed
 - Given `getKnownModels('claude')` is called, then only models with `cli` including `'claude'` are returned
 - Given `getKnownModels()` is called with no argument, then all models are returned
+- Given `listModels({ cli: 'claude', provider: 'anthropic' })` is called, then only Anthropic models supporting Claude are returned
+- Given `listModels()` is called with no options, then all known models are returned
+- Given `getAdapter('claude')` is called, then it returns the Claude adapter instance
 - Given `createAccumulator()` is called, then all numeric fields start at 0 and nullable fields are null

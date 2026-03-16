@@ -29,7 +29,7 @@ src/
 
 | Spec | Source Path | Description |
 |------|------------|-------------|
-| [Types & Constants](./01-types-and-constants.md) | `src/types.ts`, `src/models.ts` | Shared types, interfaces, enums, and known-models registry |
+| [Types & Constants](./01-types-and-constants.md) | `src/types.ts`, `src/models.ts`, `src/adapters/index.ts` | Shared types, interfaces, enums, known-models registry, `listModels()`, and adapter registry |
 | [Detection](./02-detection.md) | `src/core/detect.ts` | Detect CLI installation, version, and auth status |
 | [Command Building](./03-command-building.md) | `src/adapters/{claude,codex,opencode}.ts` | Build CLI command + args from SpawnOptions |
 | [Stream Parsing](./04-stream-parsing.md) | `src/core/stream.ts`, `src/adapters/*.ts` | Parse raw JSONL into normalized CliEvent stream |

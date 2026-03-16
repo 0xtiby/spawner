@@ -103,7 +103,7 @@ The base command depends on session state:
 
 ### Prompt delivery
 
-Pipe `options.prompt` to stdin for `exec` and `exec resume` modes. Not applicable for `fork`.
+Pipe `options.prompt` to stdin for `exec` and `exec resume` modes. For `fork` mode, `options.prompt` is silently ignored — the fork command creates a branch of an existing session and does not accept new input.
 
 ### Unsupported options
 
