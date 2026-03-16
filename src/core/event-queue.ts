@@ -5,9 +5,10 @@ export class EventQueue implements AsyncIterable<CliEvent> {
   private waiting: ((value: IteratorResult<CliEvent>) => void) | null = null;
   private closed = false;
   private err: Error | null = null;
+  abandoned = false;
 
   push(event: CliEvent): void {
-    if (this.closed) return;
+    if (this.closed || this.abandoned) return;
 
     if (this.waiting) {
       const resolve = this.waiting;
@@ -51,7 +52,7 @@ export class EventQueue implements AsyncIterable<CliEvent> {
           return Promise.resolve({ value: this.buffer.shift()!, done: false });
         }
 
-        if (this.closed) {
+        if (this.closed || this.abandoned) {
           return Promise.resolve({ value: undefined as unknown as CliEvent, done: true });
         }
 
@@ -61,7 +62,7 @@ export class EventQueue implements AsyncIterable<CliEvent> {
       },
 
       return: (): Promise<IteratorResult<CliEvent>> => {
-        this.closed = true;
+        this.abandoned = true;
         this.buffer.length = 0;
         this.waiting = null;
         return Promise.resolve({ value: undefined as unknown as CliEvent, done: true });

@@ -241,6 +241,48 @@ describe('spawn', () => {
     });
   });
 
+  describe('iterator abandonment', () => {
+    it('breaking out of for-await does not kill the process', async () => {
+      adapter.buildCommand = () => ({
+        bin: 'sh',
+        args: ['-c', 'echo line1; echo line2; echo line3; sleep 0.1; echo done'],
+        stdinInput: undefined,
+      });
+
+      const proc = spawn(makeOptions());
+
+      // Break after first event
+      for await (const _event of proc.events) {
+        break;
+      }
+
+      // done still resolves — process was not killed
+      const result = await proc.done;
+      expect(result).toBeDefined();
+      expect(result.exitCode).toBe(0);
+    });
+
+    it('done resolves with complete result after iterator abandoned', async () => {
+      adapter.buildCommand = () => ({
+        bin: 'echo',
+        args: ['hello'],
+        stdinInput: undefined,
+      });
+
+      const proc = spawn(makeOptions());
+
+      // Consume one event then break
+      for await (const _event of proc.events) {
+        break;
+      }
+
+      const result = await proc.done;
+      expect(result.exitCode).toBe(0);
+      expect(result).toHaveProperty('durationMs');
+      expect(result).toHaveProperty('sessionId');
+    });
+  });
+
   describe('interrupt', () => {
     it('sends SIGTERM to running process', async () => {
       adapter.buildCommand = () => ({

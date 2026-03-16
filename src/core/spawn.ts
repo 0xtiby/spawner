@@ -67,7 +67,7 @@ export function spawn(options: SpawnOptions): CliProcess {
     verbose: options.verbose,
   });
 
-  // Pipe stream events into the queue
+  // Pipe stream events into the queue (continues even if consumer abandons iterator)
   const pipePromise = (async () => {
     for await (const event of streamEvents) {
       if (options.verbose || debug) {
@@ -78,7 +78,9 @@ export function spawn(options: SpawnOptions): CliProcess {
           log(`event: ${event.type} (${event.content?.length ?? 0} chars)`);
         }
       }
-      queue.push(event);
+      if (!queue.abandoned) {
+        queue.push(event);
+      }
     }
   })();
 
