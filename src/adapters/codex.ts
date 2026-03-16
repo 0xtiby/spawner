@@ -1,7 +1,8 @@
-import type { CliEvent, DetectResult, SpawnOptions } from '../types.js';
+import type { CliEvent, CliError, DetectResult, SpawnOptions } from '../types.js';
 import type { CliAdapter, SessionAccumulator } from './types.js';
 import { execCommand } from '../core/detect.js';
 import type { ExecResult } from '../core/detect.js';
+import { classifyErrorDefault } from '../core/errors.js';
 
 function isExecResult(result: Awaited<ReturnType<typeof execCommand>>): result is ExecResult {
   return 'exitCode' in result;
@@ -156,7 +157,20 @@ export const codexAdapter: CliAdapter = {
     }
   },
 
-  classifyError(_exitCode: number, _stderr: string, _stdout: string) {
-    throw new Error('codex adapter classifyError not implemented');
+  classifyError(exitCode: number, stderr: string, stdout: string): CliError {
+    // Codex-specific: non-zero exit + empty/minimal output → permission_denied
+    // This heuristic catches processes killed while waiting for stdin approval
+    if (exitCode !== 0 && !stderr.trim() && !stdout.trim()) {
+      return {
+        code: 'permission_denied',
+        message: `Process exited with code ${exitCode} (no output — likely killed awaiting approval)`,
+        retryable: false,
+        retryAfterMs: null,
+        raw: '',
+      };
+    }
+
+    // Fall through to shared patterns + default classification
+    return classifyErrorDefault(exitCode, stderr, stdout);
   },
 };

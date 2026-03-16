@@ -20,7 +20,7 @@ describe('getAdapter', () => {
     });
   }
 
-  const classifyErrorStubs: CliName[] = ['codex', 'opencode'];
+  const classifyErrorStubs: CliName[] = ['opencode'];
   for (const name of classifyErrorStubs) {
     it(`${name} adapter classifyError throws (not yet implemented)`, () => {
       const adapter = getAdapter(name);

@@ -211,3 +211,35 @@ describe('codexAdapter.buildCommand', () => {
     expect(result.stdinInput).toBe('follow up');
   });
 });
+
+describe('codexAdapter.classifyError', () => {
+  it('returns permission_denied for non-zero exit + empty stderr/stdout', () => {
+    const result = codexAdapter.classifyError(1, '', '');
+    expect(result.code).toBe('permission_denied');
+    expect(result.retryable).toBe(false);
+  });
+
+  it('returns permission_denied for non-zero exit + whitespace-only output', () => {
+    const result = codexAdapter.classifyError(137, '  \n  ', '  ');
+    expect(result.code).toBe('permission_denied');
+    expect(result.retryable).toBe(false);
+  });
+
+  it('defers to shared patterns when stderr has actual error text', () => {
+    const result = codexAdapter.classifyError(1, 'rate limit exceeded', '');
+    expect(result.code).toBe('rate_limit');
+    expect(result.retryable).toBe(true);
+  });
+
+  it('returns auth error from shared patterns', () => {
+    const result = codexAdapter.classifyError(1, 'not authenticated', '');
+    expect(result.code).toBe('auth');
+    expect(result.retryable).toBe(false);
+  });
+
+  it('returns fatal for non-zero exit + unrecognized error text', () => {
+    const result = codexAdapter.classifyError(1, 'something went wrong', '');
+    expect(result.code).toBe('fatal');
+    expect(result.retryable).toBe(false);
+  });
+});
