@@ -174,6 +174,11 @@ export function spawn(options: SpawnOptions): CliProcess {
   }
 
   async function interruptFn(graceMs = 5000): Promise<CliResult> {
+    // Already exited — no-op
+    if (doneResult) {
+      return doneResult;
+    }
+
     child.kill('SIGTERM');
 
     const timeout = setTimeout(() => {
