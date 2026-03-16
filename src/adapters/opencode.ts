@@ -1,4 +1,4 @@
-import type { DetectResult } from '../types.js';
+import type { DetectResult, SpawnOptions } from '../types.js';
 import type { CliAdapter, SessionAccumulator } from './types.js';
 import { execCommand } from '../core/detect.js';
 import type { ExecResult } from '../core/detect.js';
@@ -28,8 +28,32 @@ export const opencodeAdapter: CliAdapter = {
     return { installed: true, version, authenticated, binaryPath: 'opencode' };
   },
 
-  buildCommand() {
-    throw new Error('opencode adapter buildCommand not implemented');
+  buildCommand(options: SpawnOptions) {
+    const args: string[] = ['run', '--format', 'json'];
+
+    if (options.model) {
+      args.push('--model', options.model);
+    }
+
+    // Session logic: sessionId takes precedence over continueSession
+    if (options.sessionId) {
+      args.push('--session', options.sessionId);
+    } else if (options.continueSession) {
+      args.push('--continue');
+    }
+
+    // forkSession is additive — only applies when sessionId or continueSession is set
+    if (options.forkSession && (options.sessionId || options.continueSession)) {
+      args.push('--fork');
+    }
+
+    // Unsupported options silently ignored: autoApprove, addDirs, ephemeral, effort
+
+    if (options.extraArgs) {
+      args.push(...options.extraArgs);
+    }
+
+    return { bin: 'opencode', args, stdinInput: options.prompt };
   },
 
   parseLine(_line: string, _accumulator: SessionAccumulator) {

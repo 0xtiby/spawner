@@ -29,8 +29,10 @@ describe('getAdapter', () => {
     });
   }
 
-  it('opencode adapter buildCommand throws (not yet implemented)', () => {
+  it('opencode adapter buildCommand returns valid command', () => {
     const adapter = getAdapter('opencode');
-    expect(() => adapter.buildCommand({} as any)).toThrow('opencode adapter buildCommand not implemented');
+    const result = adapter.buildCommand({ cli: 'opencode', prompt: 'test', cwd: '/tmp' });
+    expect(result.bin).toBe('opencode');
+    expect(result.args).toContain('run');
   });
 });
