@@ -1,0 +1,2 @@
+{"type":"text","content":"Hello! How can I help you today?"}
+{"type":"step_finish","session_id":"sess-oc-001","model":"gpt-4o","usage":{"input_tokens":30,"output_tokens":10},"cost":0.0005}
