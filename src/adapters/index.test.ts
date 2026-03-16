@@ -20,12 +20,19 @@ describe('getAdapter', () => {
     });
   }
 
-  const stubNames: CliName[] = ['codex', 'opencode'];
-  for (const name of stubNames) {
-    it(`${name} adapter unimplemented methods throw`, () => {
+  const classifyErrorStubs: CliName[] = ['codex', 'opencode'];
+  for (const name of classifyErrorStubs) {
+    it(`${name} adapter classifyError throws (not yet implemented)`, () => {
+      const adapter = getAdapter(name);
+      expect(() => adapter.classifyError(1, '', '')).toThrow(`${name} adapter classifyError not implemented`);
+    });
+  }
+
+  const parseLineStubs: CliName[] = ['opencode'];
+  for (const name of parseLineStubs) {
+    it(`${name} adapter parseLine throws (not yet implemented)`, () => {
       const adapter = getAdapter(name);
       expect(() => adapter.parseLine('', {} as any)).toThrow(`${name} adapter parseLine not implemented`);
-      expect(() => adapter.classifyError(1, '', '')).toThrow(`${name} adapter classifyError not implemented`);
     });
   }
 
