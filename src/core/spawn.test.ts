@@ -173,4 +173,92 @@ describe('spawn', () => {
     expect(result.error).not.toBeNull();
     expect(result.error!.code).toBe('unknown');
   });
+
+  describe('interrupt', () => {
+    it('sends SIGTERM to running process', async () => {
+      adapter.buildCommand = () => ({
+        bin: 'sleep',
+        args: ['30'],
+        stdinInput: undefined,
+      });
+
+      const proc = spawn(makeOptions());
+      const result = await proc.interrupt();
+
+      expect(result).toBeDefined();
+      expect(result.exitCode).not.toBe(0);
+    });
+
+    it('process that exits quickly does not receive SIGKILL', async () => {
+      // sleep responds to SIGTERM by default — it exits immediately
+      adapter.buildCommand = () => ({
+        bin: 'sleep',
+        args: ['30'],
+        stdinInput: undefined,
+      });
+
+      const proc = spawn(makeOptions());
+      const start = Date.now();
+      const result = await proc.interrupt(5000);
+      const elapsed = Date.now() - start;
+
+      // Process exited via SIGTERM well before the 5s SIGKILL timeout
+      expect(result).toBeDefined();
+      expect(elapsed).toBeLessThan(4000);
+    });
+
+    it('process that ignores SIGTERM receives SIGKILL after graceMs', { timeout: 10000 }, async () => {
+      // node -e with SIGTERM trapped will ignore SIGTERM, requiring SIGKILL
+      adapter.buildCommand = () => ({
+        bin: 'node',
+        args: ['-e', "process.on('SIGTERM', () => {}); setTimeout(() => {}, 60000);"],
+        stdinInput: undefined,
+      });
+
+      const proc = spawn(makeOptions());
+      await new Promise((r) => setTimeout(r, 100));
+
+      const start = Date.now();
+      const result = await proc.interrupt(200);
+      const elapsed = Date.now() - start;
+
+      expect(result).toBeDefined();
+      expect(elapsed).toBeGreaterThanOrEqual(150);
+    });
+
+    it('interrupt on exited process returns done immediately', async () => {
+      adapter.buildCommand = () => ({
+        bin: 'echo',
+        args: ['hi'],
+        stdinInput: undefined,
+      });
+
+      const proc = spawn(makeOptions());
+      const originalResult = await proc.done;
+
+      // Process already exited — interrupt should be a no-op
+      const result = await proc.interrupt();
+      expect(result).toBe(originalResult);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it('custom graceMs is respected', { timeout: 10000 }, async () => {
+      adapter.buildCommand = () => ({
+        bin: 'node',
+        args: ['-e', "process.on('SIGTERM', () => {}); setTimeout(() => {}, 60000);"],
+        stdinInput: undefined,
+      });
+
+      const proc = spawn(makeOptions());
+      await new Promise((r) => setTimeout(r, 100));
+
+      const start = Date.now();
+      const result = await proc.interrupt(100);
+      const elapsed = Date.now() - start;
+
+      expect(result).toBeDefined();
+      expect(elapsed).toBeGreaterThanOrEqual(80);
+      expect(elapsed).toBeLessThan(2000);
+    });
+  });
 });
