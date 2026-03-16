@@ -1,4 +1,4 @@
-import type { DetectResult, SpawnOptions } from '../types.js';
+import type { CliEvent, DetectResult, SpawnOptions } from '../types.js';
 import type { CliAdapter, SessionAccumulator } from './types.js';
 import { execCommand } from '../core/detect.js';
 import type { ExecResult } from '../core/detect.js';
@@ -73,8 +73,71 @@ export const claudeAdapter: CliAdapter = {
     return { bin: 'claude', args, stdinInput: options.prompt };
   },
 
-  parseLine(_line: string, _accumulator: SessionAccumulator) {
-    throw new Error('claude adapter parseLine not implemented');
+  parseLine(line: string, accumulator: SessionAccumulator): CliEvent[] {
+    if (!line.trim()) return [];
+
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(line);
+    } catch {
+      return [{ type: 'system', content: line, timestamp: Date.now(), raw: line }];
+    }
+
+    const now = Date.now();
+
+    switch (json.type) {
+      case 'system': {
+        accumulator.sessionId = (json.session_id as string) ?? accumulator.sessionId;
+        accumulator.model = (json.model as string) ?? accumulator.model;
+        const parts: string[] = [];
+        if (json.session_id) parts.push(`session=${json.session_id}`);
+        if (json.model) parts.push(`model=${json.model}`);
+        return [{ type: 'system', content: parts.join(', ') || 'system', timestamp: now, raw: line }];
+      }
+
+      case 'assistant': {
+        const events: CliEvent[] = [];
+        const message = json.message as { content?: Array<Record<string, unknown>> } | undefined;
+        const blocks = message?.content ?? [];
+        for (const block of blocks) {
+          if (block.type === 'text') {
+            events.push({ type: 'text', content: block.text as string, timestamp: now, raw: line });
+          } else if (block.type === 'tool_use') {
+            events.push({
+              type: 'tool_use',
+              tool: { name: block.name as string, input: block.input as Record<string, unknown> },
+              timestamp: now,
+              raw: line,
+            });
+          } else if (block.type === 'tool_result') {
+            events.push({
+              type: 'tool_result',
+              toolResult: {
+                name: block.name as string,
+                output: block.content as string,
+                error: block.is_error ? (block.content as string) : undefined,
+              },
+              timestamp: now,
+              raw: line,
+            });
+          }
+        }
+        return events;
+      }
+
+      case 'result': {
+        accumulator.sessionId = (json.session_id as string) ?? accumulator.sessionId;
+        accumulator.model = (json.model as string) ?? accumulator.model;
+        const usage = json.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+        accumulator.inputTokens += usage?.input_tokens ?? 0;
+        accumulator.outputTokens += usage?.output_tokens ?? 0;
+        accumulator.cost = (json.cost_usd as number) ?? accumulator.cost;
+        return [];
+      }
+
+      default:
+        return [{ type: 'system', content: line, timestamp: now, raw: line }];
+    }
   },
 
   classifyError(_exitCode: number, _stderr: string, _stdout: string) {
