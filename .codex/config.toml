@@ -1,0 +1,10 @@
+# Codex CLI — project-level configuration
+# Mirrors permissions from .claude/settings.json in Codex's format.
+#
+# Note: Codex has no general-purpose hooks system (only notification hooks),
+# so the startup hooks from .claude/hooks/ cannot be ported here.
+# See .claude/hooks/ or .opencode/plugins/ for those capabilities.
+
+model = "gpt-5"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"

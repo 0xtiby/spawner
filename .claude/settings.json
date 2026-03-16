@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:www.better-auth.com)",
+      "WebFetch(domain:polar.sh)",
+      "Bash(rm:*)",
+      "Bash(tree:*)",
+      "Bash(grep:*)",
+      "WebSearch",
+      "Bash(head:*)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:eniem.dev)",
+      "WebFetch(domain:github.com)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/inject-commit-context.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/inject-tree-context.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
