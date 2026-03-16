@@ -28,13 +28,10 @@ describe('getAdapter', () => {
     });
   }
 
-  const parseLineStubs: CliName[] = ['opencode'];
-  for (const name of parseLineStubs) {
-    it(`${name} adapter parseLine throws (not yet implemented)`, () => {
-      const adapter = getAdapter(name);
-      expect(() => adapter.parseLine('', {} as any)).toThrow(`${name} adapter parseLine not implemented`);
-    });
-  }
+  it('opencode adapter parseLine returns empty array for empty line', () => {
+    const adapter = getAdapter('opencode');
+    expect(adapter.parseLine('', { sessionId: null, model: null, inputTokens: 0, outputTokens: 0, cost: null })).toEqual([]);
+  });
 
   it('claude adapter buildCommand returns valid command', () => {
     const adapter = getAdapter('claude');
