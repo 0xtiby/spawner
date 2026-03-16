@@ -29,10 +29,27 @@ describe('getAdapter', () => {
     });
   }
 
+  it('claude adapter buildCommand returns valid command', () => {
+    const adapter = getAdapter('claude');
+    const result = adapter.buildCommand({ cli: 'claude', prompt: 'hi', cwd: '/tmp' });
+    expect(result.bin).toBe('claude');
+    expect(result.args).toContain('--print');
+    expect(result.stdinInput).toBe('hi');
+  });
+
+  it('codex adapter buildCommand returns valid command', () => {
+    const adapter = getAdapter('codex');
+    const result = adapter.buildCommand({ cli: 'codex', prompt: 'hi', cwd: '/tmp' });
+    expect(result.bin).toBe('codex');
+    expect(result.args).toContain('exec');
+    expect(result.stdinInput).toBe('hi');
+  });
+
   it('opencode adapter buildCommand returns valid command', () => {
     const adapter = getAdapter('opencode');
-    const result = adapter.buildCommand({ cli: 'opencode', prompt: 'test', cwd: '/tmp' });
+    const result = adapter.buildCommand({ cli: 'opencode', prompt: 'hi', cwd: '/tmp' });
     expect(result.bin).toBe('opencode');
     expect(result.args).toContain('run');
+    expect(result.stdinInput).toBe('hi');
   });
 });
