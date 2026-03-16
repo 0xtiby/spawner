@@ -67,6 +67,72 @@ describe('detect', () => {
       binaryPath: null,
     });
   });
+
+  it('never throws — returns safe default on rejected promise', async () => {
+    mockGetAdapter.mockReturnValue({
+      detect: () => Promise.reject(new Error('network fail')),
+    } as any);
+
+    const result = await detect('codex');
+    expect(result).toEqual({
+      installed: false,
+      version: null,
+      authenticated: false,
+      binaryPath: null,
+    });
+  });
+
+  it('returns authenticated false when adapter reports not installed (auth skipped)', async () => {
+    const mockDetect = vi.fn().mockResolvedValue({
+      installed: false,
+      version: null,
+      authenticated: false,
+      binaryPath: null,
+    });
+    mockGetAdapter.mockReturnValue({ detect: mockDetect } as any);
+
+    const result = await detect('opencode');
+    expect(result.authenticated).toBe(false);
+    expect(result.installed).toBe(false);
+  });
+
+  it('preserves adapter result when installed but not authed', async () => {
+    mockGetAdapter.mockReturnValue({
+      detect: () => Promise.resolve({
+        installed: true,
+        version: '2.0.0',
+        authenticated: false,
+        binaryPath: 'codex',
+      }),
+    } as any);
+
+    const result = await detect('codex');
+    expect(result).toEqual({
+      installed: true,
+      version: '2.0.0',
+      authenticated: false,
+      binaryPath: 'codex',
+    });
+  });
+
+  it('preserves adapter result when version is null (timeout)', async () => {
+    mockGetAdapter.mockReturnValue({
+      detect: () => Promise.resolve({
+        installed: true,
+        version: null,
+        authenticated: false,
+        binaryPath: 'claude',
+      }),
+    } as any);
+
+    const result = await detect('claude');
+    expect(result).toEqual({
+      installed: true,
+      version: null,
+      authenticated: false,
+      binaryPath: 'claude',
+    });
+  });
 });
 
 describe('detectAll', () => {
@@ -76,19 +142,39 @@ describe('detectAll', () => {
 
   it('runs all three CLIs concurrently and returns keyed results', async () => {
     const makeResult = (cli: string) => ({
-      installed: false,
-      version: null,
-      authenticated: false,
-      binaryPath: null,
+      installed: true,
+      version: `${cli}-1.0`,
+      authenticated: cli !== 'opencode',
+      binaryPath: cli,
     });
     mockGetAdapter.mockImplementation((cli) => ({
       detect: () => Promise.resolve(makeResult(cli)),
     } as any));
 
     const results = await detectAll();
-    expect(results).toHaveProperty('claude');
-    expect(results).toHaveProperty('codex');
-    expect(results).toHaveProperty('opencode');
+    expect(results.claude).toEqual(makeResult('claude'));
+    expect(results.codex).toEqual(makeResult('codex'));
+    expect(results.opencode).toEqual(makeResult('opencode'));
     expect(mockGetAdapter).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns safe defaults for any adapter that throws', async () => {
+    mockGetAdapter.mockImplementation((cli) => {
+      if (cli === 'codex') {
+        return { detect: () => { throw new Error('crash'); } } as any;
+      }
+      return {
+        detect: () => Promise.resolve({
+          installed: true, version: '1.0', authenticated: true, binaryPath: cli,
+        }),
+      } as any;
+    });
+
+    const results = await detectAll();
+    expect(results.claude.installed).toBe(true);
+    expect(results.codex).toEqual({
+      installed: false, version: null, authenticated: false, binaryPath: null,
+    });
+    expect(results.opencode.installed).toBe(true);
   });
 });
