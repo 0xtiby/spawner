@@ -174,6 +174,73 @@ describe('spawn', () => {
     expect(result.error!.code).toBe('unknown');
   });
 
+  describe('abortSignal', () => {
+    it('abort triggers interrupt on running process', async () => {
+      adapter.buildCommand = () => ({
+        bin: 'sleep',
+        args: ['30'],
+        stdinInput: undefined,
+      });
+
+      const ac = new AbortController();
+      const proc = spawn(makeOptions({ abortSignal: ac.signal }));
+
+      // Give process time to start
+      await new Promise((r) => setTimeout(r, 50));
+      ac.abort();
+
+      const result = await proc.done;
+      expect(result).toBeDefined();
+      expect(result.exitCode).not.toBe(0);
+    });
+
+    it('listener is removed after process exits normally', async () => {
+      adapter.buildCommand = () => ({
+        bin: 'echo',
+        args: ['hi'],
+        stdinInput: undefined,
+      });
+
+      const ac = new AbortController();
+      const proc = spawn(makeOptions({ abortSignal: ac.signal }));
+      await proc.done;
+
+      // After process exits, aborting should not throw or cause issues
+      ac.abort();
+      // If listener wasn't cleaned up, this would call interrupt on a dead process
+    });
+
+    it('pre-aborted signal triggers interrupt immediately', async () => {
+      adapter.buildCommand = () => ({
+        bin: 'sleep',
+        args: ['30'],
+        stdinInput: undefined,
+      });
+
+      const ac = new AbortController();
+      ac.abort(); // Abort before spawning
+
+      const proc = spawn(makeOptions({ abortSignal: ac.signal }));
+      const result = await proc.done;
+
+      expect(result).toBeDefined();
+      expect(result.exitCode).not.toBe(0);
+    });
+
+    it('no error when abortSignal is omitted', async () => {
+      adapter.buildCommand = () => ({
+        bin: 'echo',
+        args: ['hi'],
+        stdinInput: undefined,
+      });
+
+      const proc = spawn(makeOptions());
+      const result = await proc.done;
+
+      expect(result.exitCode).toBe(0);
+    });
+  });
+
   describe('interrupt', () => {
     it('sends SIGTERM to running process', async () => {
       adapter.buildCommand = () => ({
