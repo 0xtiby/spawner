@@ -1,0 +1,5 @@
+{"type":"item.started","item":{"type":"function_call","name":"read_file","arguments":"{\"path\":\"/src/index.ts\"}"}}
+{"type":"item.completed","item":{"type":"function_call_output","call_id":"call-123","output":"export function main() {}","status":"success"}}
+{"type":"item.started","item":{"type":"function_call","name":"write_file","arguments":"not valid json {"}}
+{"type":"item.completed","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done! I read the file."}]}}
+{"type":"response.completed","response":{"usage":{"input_tokens":200,"output_tokens":40}}}
