@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ExecResult, ExecError } from '../core/detect.js';
 import type { SpawnOptions } from '../types.js';
+import type { SessionAccumulator } from './types.js';
+import { createAccumulator } from './types.js';
 
 vi.mock('../core/detect.js', () => ({
   execCommand: vi.fn(),
@@ -193,5 +195,174 @@ describe('claudeAdapter.buildCommand', () => {
   it('delivers prompt via stdinInput', () => {
     const result = claudeAdapter.buildCommand({ ...baseOptions, prompt: 'do something' });
     expect(result.stdinInput).toBe('do something');
+  });
+});
+
+describe('claudeAdapter.parseLine', () => {
+  let acc: SessionAccumulator;
+
+  beforeEach(() => {
+    acc = createAccumulator();
+  });
+
+  it('returns empty array for empty string', () => {
+    expect(claudeAdapter.parseLine('', acc)).toEqual([]);
+  });
+
+  it('returns empty array for whitespace-only line', () => {
+    expect(claudeAdapter.parseLine('   ', acc)).toEqual([]);
+  });
+
+  it('returns system event for invalid JSON', () => {
+    const events = claudeAdapter.parseLine('not json at all', acc);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('system');
+    expect(events[0].content).toBe('not json at all');
+    expect(events[0].raw).toBe('not json at all');
+    expect(events[0].timestamp).toBeTypeOf('number');
+  });
+
+  it('parses system line — updates accumulator and returns system event', () => {
+    const line = JSON.stringify({ type: 'system', session_id: 'sess-1', model: 'opus-4' });
+    const events = claudeAdapter.parseLine(line, acc);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('system');
+    expect(events[0].content).toContain('session=sess-1');
+    expect(events[0].content).toContain('model=opus-4');
+    expect(events[0].raw).toBe(line);
+    expect(acc.sessionId).toBe('sess-1');
+    expect(acc.model).toBe('opus-4');
+  });
+
+  it('parses assistant line with text block', () => {
+    const line = JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'Hello world' }] },
+    });
+    const events = claudeAdapter.parseLine(line, acc);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('text');
+    expect(events[0].content).toBe('Hello world');
+    expect(events[0].raw).toBe(line);
+  });
+
+  it('parses assistant line with tool_use block', () => {
+    const line = JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', name: 'read_file', input: { path: '/foo' } }] },
+    });
+    const events = claudeAdapter.parseLine(line, acc);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('tool_use');
+    expect(events[0].tool).toEqual({ name: 'read_file', input: { path: '/foo' } });
+    expect(events[0].raw).toBe(line);
+  });
+
+  it('parses assistant line with tool_result block', () => {
+    const line = JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_result', name: 'read_file', content: 'file contents', is_error: false }] },
+    });
+    const events = claudeAdapter.parseLine(line, acc);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('tool_result');
+    expect(events[0].toolResult).toEqual({ name: 'read_file', output: 'file contents', error: undefined });
+  });
+
+  it('parses assistant line with tool_result error block', () => {
+    const line = JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_result', name: 'run', content: 'failed', is_error: true }] },
+    });
+    const events = claudeAdapter.parseLine(line, acc);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].toolResult).toEqual({ name: 'run', output: 'failed', error: 'failed' });
+  });
+
+  it('parses assistant line with mixed text and tool_use blocks', () => {
+    const line = JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'text', text: 'Let me read that.' },
+          { type: 'tool_use', name: 'read_file', input: { path: '/bar' } },
+        ],
+      },
+    });
+    const events = claudeAdapter.parseLine(line, acc);
+
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe('text');
+    expect(events[0].content).toBe('Let me read that.');
+    expect(events[1].type).toBe('tool_use');
+    expect(events[1].tool!.name).toBe('read_file');
+  });
+
+  it('parses result line — updates accumulator, returns empty array', () => {
+    const line = JSON.stringify({
+      type: 'result',
+      session_id: 'sess-2',
+      model: 'sonnet-4',
+      usage: { input_tokens: 100, output_tokens: 50 },
+      cost_usd: 0.0042,
+    });
+    const events = claudeAdapter.parseLine(line, acc);
+
+    expect(events).toEqual([]);
+    expect(acc.sessionId).toBe('sess-2');
+    expect(acc.model).toBe('sonnet-4');
+    expect(acc.inputTokens).toBe(100);
+    expect(acc.outputTokens).toBe(50);
+    expect(acc.cost).toBe(0.0042);
+  });
+
+  it('accumulates tokens across multiple result lines', () => {
+    const line1 = JSON.stringify({ type: 'result', usage: { input_tokens: 100, output_tokens: 50 } });
+    const line2 = JSON.stringify({ type: 'result', usage: { input_tokens: 200, output_tokens: 75 } });
+
+    claudeAdapter.parseLine(line1, acc);
+    claudeAdapter.parseLine(line2, acc);
+
+    expect(acc.inputTokens).toBe(300);
+    expect(acc.outputTokens).toBe(125);
+  });
+
+  it('every event has raw set to original line', () => {
+    const line = JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'hi' }] },
+    });
+    const events = claudeAdapter.parseLine(line, acc);
+    for (const event of events) {
+      expect(event.raw).toBe(line);
+    }
+  });
+
+  it('every event has a numeric timestamp', () => {
+    const line = JSON.stringify({ type: 'system', session_id: 'x' });
+    const events = claudeAdapter.parseLine(line, acc);
+    for (const event of events) {
+      expect(event.timestamp).toBeTypeOf('number');
+      expect(event.timestamp).toBeGreaterThan(0);
+    }
+  });
+
+  it('handles unknown type as system event', () => {
+    const line = JSON.stringify({ type: 'unknown_type', data: 123 });
+    const events = claudeAdapter.parseLine(line, acc);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('system');
+    expect(events[0].raw).toBe(line);
+  });
+
+  it('handles assistant with no message content gracefully', () => {
+    const line = JSON.stringify({ type: 'assistant', message: {} });
+    const events = claudeAdapter.parseLine(line, acc);
+    expect(events).toEqual([]);
   });
 });
