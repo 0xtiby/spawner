@@ -123,4 +123,26 @@ describe('classifyErrorDefault', () => {
     const err = classifyErrorDefault(1, '', 'rate limit exceeded');
     expect(err.code).toBe('rate_limit');
   });
+
+  it('case-insensitive matching', () => {
+    const err = classifyErrorDefault(1, 'Rate Limit Exceeded', '');
+    expect(err.code).toBe('rate_limit');
+  });
+
+  it('empty stderr and stdout with non-zero exit → fatal', () => {
+    const err = classifyErrorDefault(1, '', '');
+    expect(err.code).toBe('fatal');
+    expect(err.message).toBe('Process exited with code 1');
+  });
+
+  it('empty stderr and stdout with zero exit → unknown', () => {
+    const err = classifyErrorDefault(0, '', '');
+    expect(err.code).toBe('unknown');
+  });
+
+  it('fatal message uses first non-empty stderr line', () => {
+    const err = classifyErrorDefault(1, '\n  some error happened  \ndetails', '');
+    expect(err.code).toBe('fatal');
+    expect(err.message).toBe('some error happened');
+  });
 });
