@@ -1,4 +1,4 @@
-import type { DetectResult } from '../types.js';
+import type { DetectResult, SpawnOptions } from '../types.js';
 import type { CliAdapter, SessionAccumulator } from './types.js';
 import { execCommand } from '../core/detect.js';
 import type { ExecResult } from '../core/detect.js';
@@ -29,8 +29,48 @@ export const claudeAdapter: CliAdapter = {
     return { installed: true, version, authenticated, binaryPath: 'claude' };
   },
 
-  buildCommand() {
-    throw new Error('claude adapter buildCommand not implemented');
+  buildCommand(options: SpawnOptions) {
+    const args: string[] = ['--print', '--output-format', 'stream-json', '--verbose'];
+
+    if (options.model) {
+      args.push('--model', options.model);
+    }
+
+    // Session logic: sessionId takes precedence over continueSession
+    if (options.sessionId) {
+      args.push('--resume', options.sessionId);
+    } else if (options.continueSession) {
+      args.push('--continue');
+    }
+
+    // forkSession is additive — only applies when sessionId or continueSession is set
+    if (options.forkSession && (options.sessionId || options.continueSession)) {
+      args.push('--fork-session');
+    }
+
+    if (options.effort) {
+      args.push('--effort', options.effort);
+    }
+
+    if (options.autoApprove) {
+      args.push('--dangerously-skip-permissions');
+    }
+
+    if (options.addDirs) {
+      for (const dir of options.addDirs) {
+        args.push('--add-dir', dir);
+      }
+    }
+
+    if (options.ephemeral) {
+      args.push('--no-session-persistence');
+    }
+
+    if (options.extraArgs) {
+      args.push(...options.extraArgs);
+    }
+
+    return { bin: 'claude', args, stdinInput: options.prompt };
   },
 
   parseLine(_line: string, _accumulator: SessionAccumulator) {
