@@ -1,7 +1,8 @@
-import type { CliEvent, DetectResult, SpawnOptions } from '../types.js';
+import type { CliEvent, CliError, DetectResult, SpawnOptions } from '../types.js';
 import type { CliAdapter, SessionAccumulator } from './types.js';
 import { execCommand } from '../core/detect.js';
 import type { ExecResult } from '../core/detect.js';
+import { matchSharedPatterns, parseRetryAfterMs, classifyErrorDefault } from '../core/errors.js';
 
 function isExecResult(result: Awaited<ReturnType<typeof execCommand>>): result is ExecResult {
   return 'exitCode' in result;
@@ -140,7 +141,23 @@ export const claudeAdapter: CliAdapter = {
     }
   },
 
-  classifyError(_exitCode: number, _stderr: string, _stdout: string) {
-    throw new Error('claude adapter classifyError not implemented');
+  classifyError(exitCode: number, stderr: string, stdout: string): CliError {
+    const combined = stderr + '\n' + stdout;
+
+    // Claude-specific: exit code 1 + auth keywords → auth error
+    if (exitCode === 1 && /\b(?:login|auth)\b/i.test(combined)) {
+      const raw = stderr + (stdout ? '\n' + stdout : '');
+      const matchedLine = combined.split('\n').find((l) => /\b(?:login|auth)\b/i.test(l))?.trim() || 'Authentication required';
+      return {
+        code: 'auth',
+        message: matchedLine,
+        retryable: false,
+        retryAfterMs: null,
+        raw,
+      };
+    }
+
+    // Fall through to shared patterns + default classification
+    return classifyErrorDefault(exitCode, stderr, stdout);
   },
 };

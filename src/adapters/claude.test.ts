@@ -366,3 +366,57 @@ describe('claudeAdapter.parseLine', () => {
     expect(events).toEqual([]);
   });
 });
+
+describe('claudeAdapter.classifyError', () => {
+  it('classifies exit code 1 + auth keyword in stderr as auth error', () => {
+    const result = claudeAdapter.classifyError(1, 'Please login to continue', '');
+    expect(result.code).toBe('auth');
+    expect(result.retryable).toBe(false);
+    expect(result.retryAfterMs).toBeNull();
+    expect(result.message).toContain('login');
+  });
+
+  it('classifies exit code 1 + "auth" keyword in stdout as auth error', () => {
+    const result = claudeAdapter.classifyError(1, '', 'auth token expired');
+    expect(result.code).toBe('auth');
+    expect(result.retryable).toBe(false);
+  });
+
+  it('delegates rate_limit to shared patterns', () => {
+    const result = claudeAdapter.classifyError(1, 'rate limit exceeded', '');
+    expect(result.code).toBe('rate_limit');
+    expect(result.retryable).toBe(true);
+    expect(result.retryAfterMs).toBe(60_000);
+  });
+
+  it('parses retry-after from rate limit message', () => {
+    const result = claudeAdapter.classifyError(1, 'rate limit exceeded, retry after 30 seconds', '');
+    expect(result.code).toBe('rate_limit');
+    expect(result.retryAfterMs).toBe(30_000);
+  });
+
+  it('returns fatal for non-zero exit with no matching pattern', () => {
+    const result = claudeAdapter.classifyError(1, 'something went wrong', '');
+    expect(result.code).toBe('fatal');
+    expect(result.retryable).toBe(false);
+  });
+
+  it('returns unknown for zero exit with no matching pattern', () => {
+    const result = claudeAdapter.classifyError(0, '', '');
+    expect(result.code).toBe('unknown');
+    expect(result.retryable).toBe(false);
+  });
+
+  it('includes raw stderr+stdout in result', () => {
+    const result = claudeAdapter.classifyError(1, 'some error', 'some output');
+    expect(result.raw).toContain('some error');
+    expect(result.raw).toContain('some output');
+  });
+
+  it('Claude auth check runs before shared patterns (exit 1 + login)', () => {
+    // "login" matches both Claude-specific auth heuristic AND shared auth pattern
+    // Claude-specific should win since it runs first
+    const result = claudeAdapter.classifyError(1, 'please login', '');
+    expect(result.code).toBe('auth');
+  });
+});
