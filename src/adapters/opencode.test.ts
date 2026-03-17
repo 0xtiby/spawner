@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ExecResult, ExecError } from '../core/detect.js';
-import type { SpawnOptions } from '../types.js';
+import type { SpawnOptions, CliError } from '../types.js';
 
 vi.mock('../core/detect.js', () => ({
   execCommand: vi.fn(),
@@ -202,5 +202,68 @@ describe('opencodeAdapter.buildCommand', () => {
   it('delivers prompt via stdinInput', () => {
     const result = opencodeAdapter.buildCommand({ ...baseOptions, prompt: 'do something' });
     expect(result.stdinInput).toBe('do something');
+  });
+});
+
+describe('opencodeAdapter.classifyError', () => {
+  it('classifies rate_limit from stderr', () => {
+    const err = opencodeAdapter.classifyError(1, 'Error: rate limit exceeded', '');
+    expect(err.code).toBe('rate_limit');
+    expect(err.retryable).toBe(true);
+    expect(err.retryAfterMs).toBeTypeOf('number');
+  });
+
+  it('classifies auth error', () => {
+    const err = opencodeAdapter.classifyError(1, 'Error: not authenticated, please login', '');
+    expect(err.code).toBe('auth');
+    expect(err.retryable).toBe(false);
+  });
+
+  it('classifies session_not_found', () => {
+    const err = opencodeAdapter.classifyError(1, 'session not found', '');
+    expect(err.code).toBe('session_not_found');
+    expect(err.retryable).toBe(false);
+  });
+
+  it('classifies model_not_found', () => {
+    const err = opencodeAdapter.classifyError(1, 'model not found: gpt-99', '');
+    expect(err.code).toBe('model_not_found');
+    expect(err.retryable).toBe(false);
+  });
+
+  it('classifies context_overflow', () => {
+    const err = opencodeAdapter.classifyError(1, 'context length exceeded', '');
+    expect(err.code).toBe('context_overflow');
+    expect(err.retryable).toBe(false);
+  });
+
+  it('classifies permission_denied', () => {
+    const err = opencodeAdapter.classifyError(1, 'permission denied', '');
+    expect(err.code).toBe('permission_denied');
+    expect(err.retryable).toBe(false);
+  });
+
+  it('returns fatal for non-zero exit with no pattern match', () => {
+    const err = opencodeAdapter.classifyError(1, 'something went wrong', '');
+    expect(err.code).toBe('fatal');
+    expect(err.retryable).toBe(false);
+  });
+
+  it('returns unknown for zero exit with no pattern match', () => {
+    const err = opencodeAdapter.classifyError(0, '', '');
+    expect(err.code).toBe('unknown');
+    expect(err.retryable).toBe(false);
+  });
+
+  it('matches patterns in stdout when stderr is empty', () => {
+    const err = opencodeAdapter.classifyError(1, '', 'too many requests');
+    expect(err.code).toBe('rate_limit');
+    expect(err.retryable).toBe(true);
+  });
+
+  it('parses retry-after from rate limit message', () => {
+    const err = opencodeAdapter.classifyError(1, 'rate limit exceeded, retry after 30 seconds', '');
+    expect(err.code).toBe('rate_limit');
+    expect(err.retryAfterMs).toBe(30_000);
   });
 });

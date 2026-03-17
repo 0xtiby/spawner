@@ -20,11 +20,13 @@ describe('getAdapter', () => {
     });
   }
 
-  const classifyErrorStubs: CliName[] = ['opencode'];
-  for (const name of classifyErrorStubs) {
-    it(`${name} adapter classifyError throws (not yet implemented)`, () => {
+  for (const name of cliNames) {
+    it(`${name} adapter classifyError returns a CliError`, () => {
       const adapter = getAdapter(name);
-      expect(() => adapter.classifyError(1, '', '')).toThrow(`${name} adapter classifyError not implemented`);
+      const err = adapter.classifyError(1, 'something failed', '');
+      expect(err).toHaveProperty('code');
+      expect(err).toHaveProperty('message');
+      expect(err).toHaveProperty('retryable');
     });
   }
 
