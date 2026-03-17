@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"019cfb9e-47ea-78e1-b857-7958cf5dca48"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc 'cat /src/index.ts'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc 'cat /src/index.ts'","aggregated_output":"export function main() {}","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Done! I read the file."}}
+{"type":"turn.completed","usage":{"input_tokens":200,"cached_input_tokens":0,"output_tokens":40}}
