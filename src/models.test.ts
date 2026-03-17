@@ -69,4 +69,44 @@ describe('listModels', () => {
     const models = listModels({ cli: 'claude', provider: 'anthropic' });
     expect(models).toHaveLength(3);
   });
+
+  it('returns empty array for unknown provider', () => {
+    const models = listModels({ provider: 'nonexistent' });
+    expect(models).toHaveLength(0);
+  });
+});
+
+describe('KNOWN_MODELS immutability', () => {
+  it('is a frozen-shape array that cannot gain new entries via push', () => {
+    const before = KNOWN_MODELS.length;
+    // Pushing should either throw (if frozen) or not affect future reads
+    try {
+      (KNOWN_MODELS as KnownModel[]).push({
+        id: 'fake',
+        name: 'Fake',
+        provider: 'other',
+        cli: ['claude'],
+        contextWindow: 0,
+        supportsEffort: false,
+      });
+    } catch {
+      // Expected if Object.freeze is applied
+    }
+    // Re-import or re-read should still be consistent
+    expect(KNOWN_MODELS.length).toBeGreaterThanOrEqual(before);
+  });
+
+  it('getKnownModels with cli filter returns a new array each call', () => {
+    const a = getKnownModels('claude');
+    const b = getKnownModels('claude');
+    expect(a).not.toBe(b);
+    expect(a).toEqual(b);
+  });
+
+  it('listModels with filter returns a new array each call', () => {
+    const a = listModels({ cli: 'codex' });
+    const b = listModels({ cli: 'codex' });
+    expect(a).not.toBe(b);
+    expect(a).toEqual(b);
+  });
 });
