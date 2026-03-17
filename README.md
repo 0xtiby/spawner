@@ -404,4 +404,4 @@ pnpm lint
 
 ## License
 
-ISC
+MIT
