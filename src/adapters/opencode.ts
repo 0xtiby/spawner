@@ -1,7 +1,8 @@
-import type { CliEvent, DetectResult, SpawnOptions } from '../types.js';
+import type { CliEvent, CliError, DetectResult, SpawnOptions } from '../types.js';
 import type { CliAdapter, SessionAccumulator } from './types.js';
 import { execCommand } from '../core/detect.js';
 import type { ExecResult } from '../core/detect.js';
+import { classifyErrorDefault } from '../core/errors.js';
 
 function isExecResult(result: Awaited<ReturnType<typeof execCommand>>): result is ExecResult {
   return 'exitCode' in result;
@@ -110,7 +111,7 @@ export const opencodeAdapter: CliAdapter = {
     }
   },
 
-  classifyError(_exitCode: number, _stderr: string, _stdout: string) {
-    throw new Error('opencode adapter classifyError not implemented');
+  classifyError(exitCode: number, stderr: string, stdout: string): CliError {
+    return classifyErrorDefault(exitCode, stderr, stdout);
   },
 };
