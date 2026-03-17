@@ -41,9 +41,9 @@ export const codexAdapter: CliAdapter = {
       args.push('fork', options.sessionId!);
       stdinInput = undefined;
     } else if (isResumeById) {
-      args.push('exec', 'resume', options.sessionId!);
+      args.push('exec', '--json', 'resume', options.sessionId!);
     } else if (isResumeLast) {
-      args.push('exec', 'resume', '--last');
+      args.push('exec', '--json', 'resume', '--last');
     } else {
       args.push('exec', '--json');
     }
