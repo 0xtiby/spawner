@@ -21,21 +21,29 @@ describe('OpenCode adapter parseLine (fixture-based)', () => {
   });
 
   describe('text-response.jsonl', () => {
-    it('text type returns text event with correct content', () => {
+    it('text type returns text event with correct content from part.text', () => {
       const lines = fixture('text-response.jsonl');
-      const events = opencodeAdapter.parseLine(lines[0], acc);
+      const events = opencodeAdapter.parseLine(lines[1], acc);
 
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('text');
       expect(events[0].content).toBe('Hello! How can I help you today?');
     });
 
-    it('step_finish updates accumulator with session info and tokens', () => {
+    it('step_start emits system event', () => {
+      const lines = fixture('text-response.jsonl');
+      const events = opencodeAdapter.parseLine(lines[0], acc);
+
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('system');
+      expect(events[0].content).toBe('step_start');
+    });
+
+    it('step_finish updates accumulator with sessionID and tokens from part', () => {
       const lines = fixture('text-response.jsonl');
       parseAll(lines, acc);
 
       expect(acc.sessionId).toBe('sess-oc-001');
-      expect(acc.model).toBe('gpt-4o');
       expect(acc.inputTokens).toBe(30);
       expect(acc.outputTokens).toBe(10);
       expect(acc.cost).toBe(0.0005);
@@ -55,35 +63,30 @@ describe('OpenCode adapter parseLine (fixture-based)', () => {
   });
 
   describe('tool-use.jsonl', () => {
-    it('tool_use type returns tool_use event with name and input', () => {
-      const lines = fixture('tool-use.jsonl');
-      const events = opencodeAdapter.parseLine(lines[0], acc);
-
-      expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('tool_use');
-      expect(events[0].tool).toEqual({ name: 'read_file', input: { path: '/src/index.ts' } });
-    });
-
-    it('tool_result type returns tool_result event', () => {
+    it('tool_use emits both tool_use and tool_result when completed', () => {
       const lines = fixture('tool-use.jsonl');
       const events = opencodeAdapter.parseLine(lines[1], acc);
 
-      expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('tool_result');
-      expect(events[0].toolResult).toEqual({
+      expect(events).toHaveLength(2);
+      expect(events[0].type).toBe('tool_use');
+      expect(events[0].tool).toEqual({ name: 'read_file', input: { path: '/src/index.ts' } });
+      expect(events[1].type).toBe('tool_result');
+      expect(events[1].toolResult).toEqual({
         name: 'read_file',
         output: 'export function main() {}',
         error: undefined,
       });
     });
 
-    it('tool_result with is_error=true includes error field', () => {
+    it('tool_use with error status includes error in tool_result', () => {
       const lines = fixture('tool-use.jsonl');
       const events = opencodeAdapter.parseLine(lines[2], acc);
 
-      expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('tool_result');
-      expect(events[0].toolResult).toEqual({
+      expect(events).toHaveLength(2);
+      expect(events[0].type).toBe('tool_use');
+      expect(events[0].tool?.name).toBe('write_file');
+      expect(events[1].type).toBe('tool_result');
+      expect(events[1].toolResult).toEqual({
         name: 'write_file',
         output: 'permission denied',
         error: 'permission denied',
@@ -92,7 +95,7 @@ describe('OpenCode adapter parseLine (fixture-based)', () => {
 
     it('text event after tool results parses correctly', () => {
       const lines = fixture('tool-use.jsonl');
-      const events = opencodeAdapter.parseLine(lines[3], acc);
+      const events = opencodeAdapter.parseLine(lines[5], acc);
 
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('text');
@@ -103,8 +106,8 @@ describe('OpenCode adapter parseLine (fixture-based)', () => {
       const lines = fixture('tool-use.jsonl');
       parseAll(lines, acc);
 
-      expect(acc.inputTokens).toBe(100);
-      expect(acc.outputTokens).toBe(25);
+      expect(acc.inputTokens).toBe(140);
+      expect(acc.outputTokens).toBe(35);
     });
   });
 
@@ -133,12 +136,11 @@ describe('OpenCode adapter parseLine (fixture-based)', () => {
       expect(acc.cost).toBe(0.0015);
     });
 
-    it('accumulator captures session and model from step_finish', () => {
+    it('accumulator captures sessionID from step_finish', () => {
       const lines = fixture('step-finish.jsonl');
       parseAll(lines, acc);
 
       expect(acc.sessionId).toBe('sess-oc-step');
-      expect(acc.model).toBe('claude-sonnet-4-20250514');
     });
   });
 
@@ -189,17 +191,8 @@ describe('OpenCode adapter parseLine (fixture-based)', () => {
       expect(events[0].raw).toBe(line);
     });
 
-    it('text type with text field instead of content parses correctly', () => {
-      const line = '{"type":"text","text":"Fallback text field"}';
-      const events = opencodeAdapter.parseLine(line, acc);
-
-      expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('text');
-      expect(events[0].content).toBe('Fallback text field');
-    });
-
-    it('step_finish without usage does not corrupt accumulator', () => {
-      const line = '{"type":"step_finish","session_id":"sess-no-usage"}';
+    it('step_finish without tokens does not corrupt accumulator', () => {
+      const line = '{"type":"step_finish","sessionID":"sess-no-usage","part":{"type":"step-finish"}}';
       opencodeAdapter.parseLine(line, acc);
 
       expect(acc.sessionId).toBe('sess-no-usage');

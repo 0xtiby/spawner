@@ -68,38 +68,45 @@ export const opencodeAdapter: CliAdapter = {
     }
 
     const now = Date.now();
+    const part = (json.part ?? {}) as Record<string, unknown>;
+    const state = (part.state ?? {}) as Record<string, unknown>;
 
     switch (json.type) {
       case 'text':
-        return [{ type: 'text', content: (json.content as string) ?? (json.text as string), timestamp: now, raw: line }];
+        return [{ type: 'text', content: (part.text as string) ?? '', timestamp: now, raw: line }];
 
-      case 'tool_use':
-        return [{
+      case 'tool_use': {
+        const events: CliEvent[] = [{
           type: 'tool_use',
-          tool: { name: json.name as string, input: (json.input as Record<string, unknown>) ?? {} },
+          tool: { name: (part.tool as string) ?? (part.callID as string), input: (state.input as Record<string, unknown>) ?? {} },
           timestamp: now,
           raw: line,
         }];
+        // OpenCode combines tool_use and tool_result in a single event when completed
+        if (state.status === 'completed' || state.status === 'error') {
+          events.push({
+            type: 'tool_result',
+            toolResult: {
+              name: (part.tool as string) ?? (part.callID as string),
+              output: (state.output as string) ?? '',
+              error: state.status === 'error' ? ((state.output as string) ?? 'tool error') : undefined,
+            },
+            timestamp: now,
+            raw: line,
+          });
+        }
+        return events;
+      }
 
-      case 'tool_result':
-        return [{
-          type: 'tool_result',
-          toolResult: {
-            name: json.name as string,
-            output: json.output as string,
-            error: json.is_error ? (json.output as string) : undefined,
-          },
-          timestamp: now,
-          raw: line,
-        }];
+      case 'step_start':
+        return [{ type: 'system', content: 'step_start', timestamp: now, raw: line }];
 
       case 'step_finish': {
-        accumulator.sessionId = (json.session_id as string) ?? accumulator.sessionId;
-        accumulator.model = (json.model as string) ?? accumulator.model;
-        const usage = json.usage as { input_tokens?: number; output_tokens?: number } | undefined;
-        accumulator.inputTokens += usage?.input_tokens ?? 0;
-        accumulator.outputTokens += usage?.output_tokens ?? 0;
-        accumulator.cost = (json.cost as number) ?? accumulator.cost;
+        accumulator.sessionId = (json.sessionID as string) ?? accumulator.sessionId;
+        const tokens = (part.tokens ?? {}) as Record<string, number>;
+        accumulator.inputTokens += tokens.input ?? 0;
+        accumulator.outputTokens += tokens.output ?? 0;
+        accumulator.cost = (part.cost as number) ?? accumulator.cost;
         return [{ type: 'system', content: 'step_finish', timestamp: now, raw: line }];
       }
 

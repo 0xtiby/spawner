@@ -101,9 +101,11 @@ describe('stream wiring (fixture-based)', () => {
       feedLines(stdout, stderr, lines);
 
       const collected = await collecting;
-      // First event should be tool_use, second tool_result (matching fixture order)
-      expect(collected[0].type).toBe('tool_use');
-      expect(collected[1].type).toBe('tool_result');
+      // OpenCode fixture starts with step_start (system), then tool_use + tool_result combined
+      const toolUse = collected.find(e => e.type === 'tool_use');
+      const toolResult = collected.find(e => e.type === 'tool_result');
+      expect(toolUse).toBeDefined();
+      expect(toolResult).toBeDefined();
     });
 
     it('timestamps are monotonically non-decreasing', async () => {
