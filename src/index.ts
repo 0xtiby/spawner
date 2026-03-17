@@ -20,5 +20,5 @@ export { KNOWN_MODELS, getKnownModels, listModels } from './models.js';
 
 export { detect, detectAll } from './core/detect.js';
 export { spawn } from './core/spawn.js';
-// TODO: export { extract } from './core/extract.js';
+export { extract } from './core/extract.js';
 export { classifyError, classifyErrorDefault, matchSharedPatterns, parseRetryAfterMs } from './core/errors.js';
