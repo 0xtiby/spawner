@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyErrorDefault, parseRetryAfterMs, matchSharedPatterns } from '../../src/core/errors.js';
+import { classifyError, classifyErrorDefault, parseRetryAfterMs, matchSharedPatterns } from '../../src/core/errors.js';
 
 describe('parseRetryAfterMs', () => {
   it('extracts seconds from "retry after 30 seconds"', () => {
@@ -144,5 +144,31 @@ describe('classifyErrorDefault', () => {
     const err = classifyErrorDefault(1, '\n  some error happened  \ndetails', '');
     expect(err.code).toBe('fatal');
     expect(err.message).toBe('some error happened');
+  });
+});
+
+describe('classifyError (dispatch)', () => {
+  it('dispatches to Claude adapter → auth', () => {
+    const err = classifyError('claude', 1, 'not authenticated', '');
+    expect(err.code).toBe('auth');
+    expect(err.retryable).toBe(false);
+  });
+
+  it('dispatches to Codex adapter → rate_limit', () => {
+    const err = classifyError('codex', 1, 'rate limit', '');
+    expect(err.code).toBe('rate_limit');
+    expect(err.retryable).toBe(true);
+  });
+
+  it('dispatches to OpenCode adapter → model_not_found', () => {
+    const err = classifyError('opencode', 1, 'unknown model', '');
+    expect(err.code).toBe('model_not_found');
+    expect(err.retryable).toBe(false);
+  });
+
+  it('returns fatal for unrecognized errors', () => {
+    const err = classifyError('claude', 1, 'something unexpected', '');
+    expect(err.code).toBe('fatal');
+    expect(err.retryable).toBe(false);
   });
 });
