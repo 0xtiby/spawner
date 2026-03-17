@@ -1,0 +1,5 @@
+{"type":"system","session_id":"sess-mal-001","model":"claude-sonnet-4-20250514"}
+not json at all
+{"type":"assistant","message":{"content":[{"type":"text","text":"Valid line after malformed one."}]}}
+{invalid json: true, missing quotes
+{"type":"result","session_id":"sess-mal-001","model":"claude-sonnet-4-20250514","usage":{"input_tokens":10,"output_tokens":5},"cost_usd":0.0001}

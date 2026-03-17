@@ -1,0 +1,2 @@
+{"type":"system","session_id":"sess-rl-001","model":"claude-sonnet-4-20250514"}
+{"type":"error","error":{"type":"rate_limit_error","message":"Rate limit exceeded. Please retry after 30 seconds."}}
