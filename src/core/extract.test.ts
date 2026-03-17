@@ -45,14 +45,14 @@ describe('extract', () => {
   describe('OpenCode adapter', () => {
     it('extracts sessionId, model, usage, and cost from step_finish', () => {
       const rawOutput = [
-        JSON.stringify({ type: 'text', content: 'Working on it' }),
-        JSON.stringify({ type: 'step_finish', session_id: 'oc-session-1', model: 'gpt-4o', usage: { input_tokens: 300, output_tokens: 120 }, cost: 0.025 }),
+        JSON.stringify({ type: 'text', timestamp: 1773747350060, sessionID: 'oc-session-1', part: { type: 'text', text: 'Working on it' } }),
+        JSON.stringify({ type: 'step_finish', timestamp: 1773747363028, sessionID: 'oc-session-1', part: { type: 'step-finish', reason: 'stop', cost: 0.025, tokens: { total: 420, input: 300, output: 120, reasoning: 0 } } }),
       ].join('\n');
 
       const result = extract({ cli: 'opencode', rawOutput });
 
       expect(result.sessionId).toBe('oc-session-1');
-      expect(result.model).toBe('gpt-4o');
+      expect(result.model).toBeNull();
       expect(result.usage!.inputTokens).toBe(300);
       expect(result.usage!.outputTokens).toBe(120);
       expect(result.usage!.totalTokens).toBe(420);
