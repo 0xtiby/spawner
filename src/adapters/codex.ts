@@ -90,18 +90,20 @@ export const codexAdapter: CliAdapter = {
     const now = Date.now();
 
     switch (json.type) {
+      case 'thread.started': {
+        accumulator.sessionId = (json.thread_id as string) ?? accumulator.sessionId;
+        return [{ type: 'system', content: 'thread.started', timestamp: now, raw: line }];
+      }
+
+      case 'turn.started':
+        return [{ type: 'system', content: 'turn.started', timestamp: now, raw: line }];
+
       case 'item.started': {
         const item = json.item as Record<string, unknown> | undefined;
-        if (item?.type === 'function_call') {
-          let input: Record<string, unknown> = {};
-          try {
-            input = JSON.parse((item.arguments as string) ?? '{}');
-          } catch {
-            // malformed arguments — fall back to empty object
-          }
+        if (item?.type === 'command_execution') {
           return [{
             type: 'tool_use',
-            tool: { name: item.name as string, input },
+            tool: { name: 'command_execution', input: { command: item.command as string } },
             timestamp: now,
             raw: line,
           }];
@@ -111,37 +113,32 @@ export const codexAdapter: CliAdapter = {
 
       case 'item.completed': {
         const item = json.item as Record<string, unknown> | undefined;
-        if (item?.type === 'function_call_output') {
+        if (item?.type === 'command_execution') {
           return [{
             type: 'tool_result',
             toolResult: {
-              name: item.call_id as string,
-              output: item.output as string,
-              error: item.status === 'error' ? (item.output as string) : undefined,
+              name: 'command_execution',
+              output: (item.aggregated_output as string) ?? '',
+              error: (item.exit_code as number) !== 0 ? ((item.aggregated_output as string) ?? 'command failed') : undefined,
             },
             timestamp: now,
             raw: line,
           }];
         }
-        if (item?.type === 'message' && item.role === 'assistant') {
-          const events: CliEvent[] = [];
-          const content = (item.content as Array<Record<string, unknown>>) ?? [];
-          for (const block of content) {
-            if (block.type === 'output_text') {
-              events.push({ type: 'text', content: block.text as string, timestamp: now, raw: line });
-            }
-          }
-          return events;
+        if (item?.type === 'agent_message') {
+          return [{ type: 'text', content: (item.text as string) ?? '', timestamp: now, raw: line }];
+        }
+        if (item?.type === 'reasoning') {
+          return []; // reasoning events are internal, don't surface
         }
         return [];
       }
 
-      case 'response.completed': {
-        const response = json.response as Record<string, unknown> | undefined;
-        const usage = response?.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+      case 'turn.completed': {
+        const usage = json.usage as { input_tokens?: number; cached_input_tokens?: number; output_tokens?: number } | undefined;
         accumulator.inputTokens += usage?.input_tokens ?? 0;
         accumulator.outputTokens += usage?.output_tokens ?? 0;
-        return [];
+        return [{ type: 'system', content: 'turn.completed', timestamp: now, raw: line }];
       }
 
       case 'error':

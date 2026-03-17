@@ -27,8 +27,9 @@ describe('extract', () => {
   describe('Codex adapter', () => {
     it('extracts usage from response.completed', () => {
       const rawOutput = [
-        JSON.stringify({ type: 'item.completed', item: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Done' }] } }),
-        JSON.stringify({ type: 'response.completed', response: { usage: { input_tokens: 150, output_tokens: 60 } } }),
+        JSON.stringify({ type: 'thread.started', thread_id: 'thread-abc' }),
+        JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'Done' } }),
+        JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 150, output_tokens: 60 } }),
       ].join('\n');
 
       const result = extract({ cli: 'codex', rawOutput });

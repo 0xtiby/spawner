@@ -21,7 +21,14 @@ describe('Codex adapter parseLine (fixture-based)', () => {
   });
 
   describe('text-response.jsonl', () => {
-    it('item.completed with assistant text returns text event', () => {
+    it('thread.started captures thread_id as sessionId', () => {
+      const lines = fixture('text-response.jsonl');
+      codexAdapter.parseLine(lines[0], acc);
+
+      expect(acc.sessionId).toBe('019cfb9b-a457-73e0-9514-673706447f49');
+    });
+
+    it('agent_message returns text event', () => {
       const lines = fixture('text-response.jsonl');
       const events = parseAll(lines, acc);
 
@@ -30,7 +37,7 @@ describe('Codex adapter parseLine (fixture-based)', () => {
       expect(textEvents[0].content).toBe('Hello! How can I help you today?');
     });
 
-    it('response.completed updates accumulator with token counts', () => {
+    it('turn.completed updates accumulator with token counts', () => {
       const lines = fixture('text-response.jsonl');
       parseAll(lines, acc);
 
@@ -52,47 +59,38 @@ describe('Codex adapter parseLine (fixture-based)', () => {
   });
 
   describe('tool-use.jsonl', () => {
-    it('item.started with function_call returns tool_use event with parsed arguments', () => {
-      const lines = fixture('tool-use.jsonl');
-      const events = codexAdapter.parseLine(lines[0], acc);
-
-      expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('tool_use');
-      expect(events[0].tool).toEqual({ name: 'read_file', input: { path: '/src/index.ts' } });
-    });
-
-    it('item.started with malformed arguments JSON returns tool_use with fallback empty input', () => {
+    it('item.started with command_execution returns tool_use event', () => {
       const lines = fixture('tool-use.jsonl');
       const events = codexAdapter.parseLine(lines[2], acc);
 
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('tool_use');
-      expect(events[0].tool).toEqual({ name: 'write_file', input: {} });
+      expect(events[0].tool).toEqual({ name: 'command_execution', input: { command: "/bin/zsh -lc 'cat /src/index.ts'" } });
     });
 
-    it('item.completed with function_call_output returns tool_result event', () => {
+    it('item.completed with command_execution returns tool_result event', () => {
       const lines = fixture('tool-use.jsonl');
-      const events = codexAdapter.parseLine(lines[1], acc);
+      const events = codexAdapter.parseLine(lines[3], acc);
 
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('tool_result');
       expect(events[0].toolResult).toEqual({
-        name: 'call-123',
+        name: 'command_execution',
         output: 'export function main() {}',
         error: undefined,
       });
     });
 
-    it('item.completed with assistant text returns text event', () => {
+    it('agent_message returns text event', () => {
       const lines = fixture('tool-use.jsonl');
-      const events = codexAdapter.parseLine(lines[3], acc);
+      const events = codexAdapter.parseLine(lines[4], acc);
 
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('text');
       expect(events[0].content).toBe('Done! I read the file.');
     });
 
-    it('response.completed updates accumulator token counts', () => {
+    it('turn.completed updates accumulator token counts', () => {
       const lines = fixture('tool-use.jsonl');
       parseAll(lines, acc);
 
@@ -139,8 +137,8 @@ describe('Codex adapter parseLine (fixture-based)', () => {
       expect(events[0].raw).toBe(line);
     });
 
-    it('item.completed with function_call_output error status includes error field', () => {
-      const line = '{"type":"item.completed","item":{"type":"function_call_output","call_id":"call-err","output":"permission denied","status":"error"}}';
+    it('command_execution with non-zero exit includes error field', () => {
+      const line = JSON.stringify({ type: 'item.completed', item: { type: 'command_execution', command: 'rm -rf /', aggregated_output: 'permission denied', exit_code: 1, status: 'completed' } });
       const events = codexAdapter.parseLine(line, acc);
 
       expect(events).toHaveLength(1);
@@ -148,16 +146,16 @@ describe('Codex adapter parseLine (fixture-based)', () => {
       expect(events[0].toolResult!.error).toBe('permission denied');
     });
 
-    it('item.started with non-function_call type returns empty array', () => {
-      const line = '{"type":"item.started","item":{"type":"message","role":"user"}}';
+    it('reasoning items are silently skipped', () => {
+      const line = JSON.stringify({ type: 'item.completed', item: { type: 'reasoning', text: 'thinking...' } });
       const events = codexAdapter.parseLine(line, acc);
 
       expect(events).toEqual([]);
     });
 
-    it('response.completed accumulates across multiple responses', () => {
-      codexAdapter.parseLine('{"type":"response.completed","response":{"usage":{"input_tokens":10,"output_tokens":5}}}', acc);
-      codexAdapter.parseLine('{"type":"response.completed","response":{"usage":{"input_tokens":20,"output_tokens":10}}}', acc);
+    it('turn.completed accumulates across multiple turns', () => {
+      codexAdapter.parseLine('{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}', acc);
+      codexAdapter.parseLine('{"type":"turn.completed","usage":{"input_tokens":20,"output_tokens":10}}', acc);
 
       expect(acc.inputTokens).toBe(30);
       expect(acc.outputTokens).toBe(15);
