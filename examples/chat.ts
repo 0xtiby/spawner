@@ -76,6 +76,25 @@ async function selectCli(): Promise<AvailableCli> {
   return available[choice - 1];
 }
 
+function handleSlashCommand(command: string, rl: readline.Interface): boolean {
+  const cmd = command.toLowerCase();
+
+  if (cmd === '/exit') {
+    console.log('Goodbye!');
+    rl.close();
+    process.exit(0);
+  }
+
+  if (cmd === '/new') {
+    console.log('Session reset not yet implemented');
+    return true;
+  }
+
+  // Unknown slash command
+  console.log(`Unknown command: ${command.split(/\s/)[0]}`);
+  return true;
+}
+
 async function chatLoop(selected: AvailableCli): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
@@ -83,10 +102,22 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
     process.exit(0);
   });
 
+  rl.on('SIGINT', () => {
+    console.log();
+    rl.close();
+    process.exit(0);
+  });
+
   const prompt = () => {
     rl.question('> ', async (input) => {
       const trimmed = input.trim();
       if (!trimmed) {
+        prompt();
+        return;
+      }
+
+      if (trimmed.startsWith('/')) {
+        handleSlashCommand(trimmed, rl);
         prompt();
         return;
       }
@@ -147,7 +178,7 @@ function isValidSelection(input: string, maxOptions: number): boolean {
   return !isNaN(num) && num >= 1 && num <= maxOptions;
 }
 
-export { selectCli, main, isValidSelection, chatLoop, CYAN, GREEN, YELLOW, RED, RESET };
+export { selectCli, main, isValidSelection, handleSlashCommand, chatLoop, CYAN, GREEN, YELLOW, RED, RESET };
 export type { AvailableCli };
 
 main().catch((err) => {
