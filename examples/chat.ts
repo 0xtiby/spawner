@@ -1,6 +1,6 @@
 import * as readline from 'node:readline';
 import { detectAll, spawn } from '../src/index.js';
-import type { CliName, DetectResult } from '../src/types.js';
+import type { CliName, CliProcess, DetectResult } from '../src/types.js';
 
 const CYAN = '\x1b[36m';
 const GREEN = '\x1b[32m';
@@ -98,11 +98,18 @@ function handleSlashCommand(command: string, rl: readline.Interface): boolean {
 async function chatLoop(selected: AvailableCli): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
+  let isStreaming = false;
+  let activeProcess: CliProcess | null = null;
+
   rl.on('close', () => {
     process.exit(0);
   });
 
   rl.on('SIGINT', () => {
+    if (isStreaming && activeProcess) {
+      activeProcess.interrupt();
+      return;
+    }
     console.log();
     rl.close();
     process.exit(0);
@@ -133,6 +140,11 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
         autoApprove: true,
       });
 
+      isStreaming = true;
+      activeProcess = proc;
+
+      let interrupted = false;
+
       for await (const event of proc.events) {
         switch (event.type) {
           case 'text':
@@ -150,6 +162,11 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
               process.stdout.write(`\n${RED}Error: ${RESET}${event.content}\n`);
             }
             break;
+          case 'done':
+            if (event.result?.error) {
+              interrupted = true;
+            }
+            break;
           case 'tool_result':
           case 'system':
             // Silently skip
@@ -157,7 +174,14 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
         }
       }
 
-      process.stdout.write('\n');
+      isStreaming = false;
+      activeProcess = null;
+
+      if (interrupted) {
+        console.log('\nResponse interrupted.');
+      } else {
+        process.stdout.write('\n');
+      }
       rl.prompt();
     });
   };
