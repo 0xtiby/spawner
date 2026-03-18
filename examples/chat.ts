@@ -2,6 +2,12 @@ import * as readline from 'node:readline';
 import { detectAll, spawn } from '../src/index.js';
 import type { CliName, DetectResult } from '../src/types.js';
 
+const CYAN = '\x1b[36m';
+const GREEN = '\x1b[32m';
+const YELLOW = '\x1b[33m';
+const RED = '\x1b[31m';
+const RESET = '\x1b[0m';
+
 const DISPLAY_NAMES: Record<CliName, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
@@ -85,8 +91,8 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
         return;
       }
 
-      console.log(`You: ${trimmed}`);
-      process.stdout.write('Assistant: ');
+      console.log(`${CYAN}You: ${RESET}${trimmed}`);
+      process.stdout.write(`${GREEN}Assistant: ${RESET}`);
       rl.pause();
 
       const proc = spawn({
@@ -105,12 +111,12 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
             break;
           case 'tool_use':
             if (event.tool?.name) {
-              process.stdout.write(`\n⚙ Using ${event.tool.name}...\n`);
+              process.stdout.write(`\n${YELLOW}⚙ Using ${event.tool.name}...${RESET}\n`);
             }
             break;
           case 'error':
             if (event.content) {
-              process.stdout.write(`\nError: ${event.content}\n`);
+              process.stdout.write(`\n${RED}Error: ${RESET}${event.content}\n`);
             }
             break;
           case 'tool_result':
@@ -141,7 +147,7 @@ function isValidSelection(input: string, maxOptions: number): boolean {
   return !isNaN(num) && num >= 1 && num <= maxOptions;
 }
 
-export { selectCli, main, isValidSelection, chatLoop };
+export { selectCli, main, isValidSelection, chatLoop, CYAN, GREEN, YELLOW, RED, RESET };
 export type { AvailableCli };
 
 main().catch((err) => {
