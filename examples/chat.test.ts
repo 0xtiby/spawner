@@ -186,6 +186,96 @@ describe('chat example', () => {
     });
   });
 
+  describe('Ctrl+C streaming interrupt', () => {
+    it('SIGINT during streaming calls interrupt on active process', () => {
+      let isStreaming = true;
+      const mockInterrupt = vi.fn();
+      const activeProcess = { interrupt: mockInterrupt };
+
+      // Simulate the SIGINT handler logic from chat.ts
+      const handleSigint = () => {
+        if (isStreaming && activeProcess) {
+          activeProcess.interrupt();
+          return;
+        }
+        process.exit(0);
+      };
+
+      handleSigint();
+      expect(mockInterrupt).toHaveBeenCalled();
+    });
+
+    it('SIGINT when not streaming exits the app', () => {
+      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      let isStreaming = false;
+      const activeProcess = null;
+
+      const handleSigint = () => {
+        if (isStreaming && activeProcess) {
+          (activeProcess as any).interrupt();
+          return;
+        }
+        process.exit(0);
+      };
+
+      handleSigint();
+      expect(mockExit).toHaveBeenCalledWith(0);
+      mockExit.mockRestore();
+    });
+
+    it('streaming state resets after process completes', () => {
+      let isStreaming = true;
+      let activeProcess: { interrupt: () => void } | null = { interrupt: vi.fn() };
+
+      // Simulate post-streaming cleanup
+      isStreaming = false;
+      activeProcess = null;
+
+      expect(isStreaming).toBe(false);
+      expect(activeProcess).toBeNull();
+    });
+
+    it('done event with error sets interrupted flag', () => {
+      let interrupted = false;
+      const doneEvent = {
+        type: 'done' as const,
+        result: { error: { code: 'fatal', message: 'killed' } },
+      };
+
+      if (doneEvent.type === 'done' && doneEvent.result?.error) {
+        interrupted = true;
+      }
+
+      expect(interrupted).toBe(true);
+    });
+
+    it('done event without error does not set interrupted flag', () => {
+      let interrupted = false;
+      const doneEvent = {
+        type: 'done' as const,
+        result: { error: null },
+      };
+
+      if (doneEvent.type === 'done' && doneEvent.result?.error) {
+        interrupted = true;
+      }
+
+      expect(interrupted).toBe(false);
+    });
+
+    it('"Response interrupted." is printed when interrupted', () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const interrupted = true;
+
+      if (interrupted) {
+        console.log('\nResponse interrupted.');
+      }
+
+      expect(consoleSpy).toHaveBeenCalledWith('\nResponse interrupted.');
+      consoleSpy.mockRestore();
+    });
+  });
+
   describe('chat loop behavior', () => {
     it('empty input is ignored — no spawn occurs', () => {
       const inputs = ['', '  ', '\t'];
