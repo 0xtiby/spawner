@@ -386,6 +386,25 @@ SpawnOptions
                                              Your Code
 ```
 
+## Examples
+
+### Interactive Chat TUI
+
+`examples/chat.ts` is a fully working terminal chat app built on spawner. It auto-detects installed CLIs, lets you pick one, then drops you into a streaming chat loop with session continuity.
+
+```bash
+pnpm tsx examples/chat.ts
+```
+
+Features:
+- **CLI selection** — detects installed CLIs, shows versions and auth status, prompts you to pick one
+- **Streaming responses** — text streams to stdout in real-time with colored labels
+- **Tool-use indicators** — shows which tools the CLI invokes during a response
+- **Session continuity** — captures `sessionId` so follow-up messages continue the conversation
+- **Ctrl+C interrupt** — interrupts a streaming response without killing the app
+- **Slash commands** — `/exit` to quit, `/new` to start a fresh session with a different CLI
+- **Error handling** — rate limits, auth failures, and CLI crashes are caught and displayed cleanly
+
 ## Development
 
 ```bash
