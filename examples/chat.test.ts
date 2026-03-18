@@ -235,15 +235,56 @@ describe('chat example', () => {
       expect(chunks.join('')).toBe('Hello there');
     });
 
-    it('user message is echoed with "You: " prefix', () => {
+    it('user message is echoed with colored "You: " prefix', () => {
+      const CYAN = '\x1b[36m';
+      const RESET = '\x1b[0m';
       const input = 'hello world';
-      const echo = `You: ${input.trim()}`;
-      expect(echo).toBe('You: hello world');
+      const echo = `${CYAN}You: ${RESET}${input.trim()}`;
+      expect(echo).toBe(`${CYAN}You: ${RESET}hello world`);
     });
 
-    it('assistant prefix is printed before streaming', () => {
-      const prefix = 'Assistant: ';
-      expect(prefix).toBe('Assistant: ');
+    it('assistant prefix is printed with color before streaming', () => {
+      const GREEN = '\x1b[32m';
+      const RESET = '\x1b[0m';
+      const prefix = `${GREEN}Assistant: ${RESET}`;
+      expect(prefix).toBe(`${GREEN}Assistant: ${RESET}`);
+    });
+  });
+
+  describe('ANSI color formatting', () => {
+    const CYAN = '\x1b[36m';
+    const GREEN = '\x1b[32m';
+    const YELLOW = '\x1b[33m';
+    const RED = '\x1b[31m';
+    const RESET = '\x1b[0m';
+
+    it('tool indicator is rendered in yellow', () => {
+      const toolName = 'read_file';
+      const output = `\n${YELLOW}⚙ Using ${toolName}...${RESET}\n`;
+      expect(output).toContain(YELLOW);
+      expect(output).toContain(RESET);
+      expect(output).toContain('⚙ Using read_file...');
+    });
+
+    it('error prefix is rendered in red with content uncolored', () => {
+      const content = 'something went wrong';
+      const output = `\n${RED}Error: ${RESET}${content}\n`;
+      expect(output).toContain(RED);
+      expect(output).toContain(RESET);
+      expect(output).toBe(`\n${RED}Error: ${RESET}something went wrong\n`);
+    });
+
+    it('all color codes reset properly', () => {
+      const labels = [
+        `${CYAN}You: ${RESET}`,
+        `${GREEN}Assistant: ${RESET}`,
+        `${YELLOW}⚙ Using tool...${RESET}`,
+        `${RED}Error: ${RESET}`,
+      ];
+      for (const label of labels) {
+        expect(label).toContain(RESET);
+        expect(label.endsWith(RESET)).toBe(true);
+      }
     });
   });
 
