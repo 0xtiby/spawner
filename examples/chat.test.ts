@@ -113,6 +113,48 @@ describe('chat example', () => {
     expect(statusFormat).toBe(' v1.2.3');
   });
 
+  describe('detection timeout handling', () => {
+    it('timed-out CLI appears in list with version unknown alongside normal CLIs', () => {
+      const results: Record<CliName, DetectResult> = {
+        claude: { installed: true, version: '1.2.3', authenticated: true, binaryPath: '/usr/bin/claude' },
+        codex: { installed: true, version: null, authenticated: false, binaryPath: '/usr/bin/codex' },
+        opencode: { installed: false, version: null, authenticated: false, binaryPath: null },
+      };
+
+      const available = (Object.entries(results) as [CliName, DetectResult][])
+        .filter(([, result]) => result.installed)
+        .map(([name, result]) => ({
+          name,
+          displayName: DISPLAY_NAMES[name],
+          result,
+        }));
+
+      expect(available).toHaveLength(2);
+
+      // Normal CLI
+      const claude = available[0];
+      const claudeVersion = claude.result.version ? `(v${claude.result.version})` : '(version unknown)';
+      expect(`${claude.displayName} ${claudeVersion}`).toBe('Claude Code (v1.2.3)');
+
+      // Timed-out CLI (version null)
+      const codex = available[1];
+      const codexVersion = codex.result.version ? `(v${codex.result.version})` : '(version unknown)';
+      const codexAuth = codex.result.authenticated ? '' : ' — not authenticated';
+      expect(`${codex.displayName} ${codexVersion}${codexAuth}`).toBe('Codex (version unknown) — not authenticated');
+    });
+
+    it('selecting a timed-out CLI produces correct status line without version', () => {
+      const selected = {
+        displayName: 'Codex',
+        result: { installed: true, version: null, authenticated: false, binaryPath: '/usr/bin/codex' } as DetectResult,
+      };
+
+      const versionSuffix = selected.result.version ? ` v${selected.result.version}` : '';
+      const statusLine = `Using ${selected.displayName}${versionSuffix} — type a message to begin, /exit to quit`;
+      expect(statusLine).toBe('Using Codex — type a message to begin, /exit to quit');
+    });
+  });
+
   it('shows error message when no CLIs found', () => {
     const available: unknown[] = [];
     let errorMessage = '';
