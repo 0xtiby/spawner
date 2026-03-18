@@ -949,4 +949,116 @@ describe('chat example', () => {
       expect(retryMsg).toBe('');
     });
   });
+
+  describe('session error recovery', () => {
+    function makeCliError(overrides: Partial<CliError> = {}): CliError {
+      return {
+        code: 'fatal',
+        message: 'something went wrong',
+        retryable: false,
+        retryAfterMs: null,
+        raw: '',
+        ...overrides,
+      };
+    }
+
+    // Simulates the error-handling logic from chatLoop
+    function handleError(
+      sessionId: string | undefined,
+      error: CliError,
+      interrupted: boolean,
+    ): { sessionId: string | undefined; message: string } {
+      let message = '';
+
+      if (error.code === 'session_not_found') {
+        message = 'Session expired — starting fresh';
+        sessionId = undefined;
+      } else if (error.code === 'rate_limit') {
+        const retryMsg = error.retryAfterMs
+          ? ` (retry in ${Math.ceil(error.retryAfterMs / 1000)}s)`
+          : '';
+        message = `Rate limited${retryMsg} — try again`;
+      } else if (!interrupted) {
+        message = error.message;
+      }
+
+      return { sessionId, message };
+    }
+
+    it('session_not_found clears sessionId', () => {
+      const { sessionId } = handleError(
+        'sess-abc',
+        makeCliError({ code: 'session_not_found', message: 'session not found' }),
+        false,
+      );
+      expect(sessionId).toBeUndefined();
+    });
+
+    it('session_not_found displays session expired message', () => {
+      const { message } = handleError(
+        'sess-abc',
+        makeCliError({ code: 'session_not_found', message: 'session not found' }),
+        false,
+      );
+      expect(message).toBe('Session expired — starting fresh');
+    });
+
+    it('rate_limit preserves sessionId', () => {
+      const { sessionId } = handleError(
+        'sess-abc',
+        makeCliError({ code: 'rate_limit', message: 'Too many requests', retryable: true }),
+        false,
+      );
+      expect(sessionId).toBe('sess-abc');
+    });
+
+    it('auth error preserves sessionId', () => {
+      const { sessionId } = handleError(
+        'sess-abc',
+        makeCliError({ code: 'auth', message: 'not authenticated' }),
+        false,
+      );
+      expect(sessionId).toBe('sess-abc');
+    });
+
+    it('two session_not_found errors in a row both clear sessionId (idempotent)', () => {
+      const error = makeCliError({ code: 'session_not_found', message: 'session not found' });
+
+      // First error clears sessionId
+      const first = handleError('sess-abc', error, false);
+      expect(first.sessionId).toBeUndefined();
+
+      // Second error also clears (already undefined — idempotent)
+      const second = handleError(first.sessionId, error, false);
+      expect(second.sessionId).toBeUndefined();
+    });
+
+    it('next message after session_not_found has no sessionId', () => {
+      let sessionId: string | undefined = 'sess-abc';
+      const spawnCalls: Array<{ sessionId?: string }> = [];
+
+      // First message succeeds
+      spawnCalls.push({ sessionId });
+
+      // Response comes back with session_not_found
+      const error = makeCliError({ code: 'session_not_found', message: 'session not found' });
+      const result = handleError(sessionId, error, false);
+      sessionId = result.sessionId;
+
+      // Next message should have no sessionId
+      spawnCalls.push({ sessionId });
+      expect(spawnCalls[1].sessionId).toBeUndefined();
+    });
+
+    it('prompt re-enables after session_not_found (function returns normally)', () => {
+      // handleError returns without throwing — prompt() will be called next
+      const result = handleError(
+        'sess-abc',
+        makeCliError({ code: 'session_not_found', message: 'session not found' }),
+        false,
+      );
+      expect(result).toBeDefined();
+      expect(result.sessionId).toBeUndefined();
+    });
+  });
 });

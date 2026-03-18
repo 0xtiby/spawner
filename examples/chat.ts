@@ -239,7 +239,10 @@ async function chatLoop(selected: AvailableCli): Promise<SlashAction> {
 
         // Check result for specific error conditions
         if (result?.error) {
-          if (result.error.code === 'rate_limit') {
+          if (result.error.code === 'session_not_found') {
+            console.log(`${RED}Session expired${RESET} — starting fresh`);
+            sessionId = undefined;
+          } else if (result.error.code === 'rate_limit') {
             const retryMsg = result.error.retryAfterMs
               ? ` (retry in ${Math.ceil(result.error.retryAfterMs / 1000)}s)`
               : '';
