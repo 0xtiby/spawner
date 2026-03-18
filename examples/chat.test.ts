@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { CliName, DetectResult, CliEvent, CliResult } from '../src/types.js';
+import type { CliName, CliProcess, DetectResult, CliEvent, CliResult, CliError } from '../src/types.js';
+import { EventQueue } from '../src/core/event-queue.js';
 import { isValidSelection, handleSlashCommand, cleanup, cleanExit } from './chat.js';
 
 // Test the display name mapping and selection logic without actually running readline
@@ -569,6 +570,223 @@ describe('chat example', () => {
 
     it('rejects decimal numbers', () => {
       expect(isValidSelection('1.5', 3)).toBe(true); // parseInt('1.5') === 1, which is valid
+    });
+  });
+
+  describe('error handling', () => {
+    // Simulates the core message-handling logic from chatLoop to test error paths
+    function makeCliError(overrides: Partial<CliError> = {}): CliError {
+      return {
+        code: 'fatal',
+        message: 'something went wrong',
+        retryable: false,
+        retryAfterMs: null,
+        raw: '',
+        ...overrides,
+      };
+    }
+
+    function makeResult(overrides: Partial<CliResult> = {}): CliResult {
+      return {
+        exitCode: 0,
+        sessionId: null,
+        usage: null,
+        model: null,
+        error: null,
+        durationMs: 100,
+        ...overrides,
+      };
+    }
+
+    function createMockProcess(options?: {
+      events?: CliEvent[];
+      error?: Error;
+      result?: CliResult;
+    }): CliProcess {
+      const queue = new EventQueue();
+      const defaultResult = makeResult();
+      const result = options?.result ?? defaultResult;
+
+      queueMicrotask(() => {
+        if (options?.error) {
+          queue.error(options.error);
+          return;
+        }
+        if (options?.events) {
+          for (const event of options.events) {
+            queue.push(event);
+          }
+        }
+        queue.push({ type: 'done', timestamp: Date.now(), result, raw: '' });
+        queue.close();
+      });
+
+      return {
+        pid: 12345,
+        events: queue,
+        interrupt: vi.fn().mockResolvedValue(result),
+        done: options?.error ? Promise.reject(result) : Promise.resolve(result),
+      };
+    }
+
+    // Mirrors the error-handling logic in chatLoop
+    async function processMessage(proc: CliProcess): Promise<{
+      interrupted: boolean;
+      result: CliResult | null;
+      streamError: Error | null;
+    }> {
+      let interrupted = false;
+      let result: CliResult | null = null;
+      let streamError: Error | null = null;
+
+      try {
+        for await (const event of proc.events) {
+          switch (event.type) {
+            case 'done':
+              result = event.result ?? null;
+              if (event.result?.error) interrupted = true;
+              break;
+          }
+        }
+      } catch (err) {
+        streamError = err instanceof Error ? err : new Error(String(err));
+      }
+
+      if (!result) {
+        try {
+          result = await proc.done;
+        } catch (r) {
+          result = r as CliResult;
+        }
+      }
+
+      return { interrupted, result, streamError };
+    }
+
+    it('catches stream error from CLI crash mid-response', async () => {
+      // Error set before iteration starts → for-await throws
+      const queue = new EventQueue();
+      const errorResult = makeResult({ exitCode: -1, error: makeCliError({ message: 'stream ended unexpectedly' }) });
+      queue.error(new Error('stream ended unexpectedly'));
+
+      const proc: CliProcess = {
+        pid: 12345,
+        events: queue,
+        interrupt: vi.fn().mockResolvedValue(errorResult),
+        done: Promise.reject(errorResult),
+      };
+
+      const { streamError, result } = await processMessage(proc);
+
+      expect(streamError).not.toBeNull();
+      expect(streamError!.message).toBe('stream ended unexpectedly');
+      expect(result).not.toBeNull();
+    });
+
+    it('detects rate limit error in CliResult', async () => {
+      const rateLimitError = makeCliError({
+        code: 'rate_limit',
+        message: 'Too many requests',
+        retryable: true,
+        retryAfterMs: 30000,
+      });
+      const proc = createMockProcess({
+        result: makeResult({ exitCode: 1, error: rateLimitError }),
+      });
+
+      const { result } = await processMessage(proc);
+
+      expect(result?.error?.code).toBe('rate_limit');
+      expect(result?.error?.retryAfterMs).toBe(30000);
+      expect(result?.error?.retryable).toBe(true);
+    });
+
+    it('detects binary_not_found error from stream', async () => {
+      // Error set before iteration → for-await throws
+      const queue = new EventQueue();
+      const errorResult = makeResult({ exitCode: -1, error: makeCliError({ code: 'binary_not_found', message: 'Binary not found: claude' }) });
+      queue.error(new Error('Binary not found: claude'));
+
+      const proc: CliProcess = {
+        pid: 12345,
+        events: queue,
+        interrupt: vi.fn().mockResolvedValue(errorResult),
+        done: Promise.reject(errorResult),
+      };
+
+      const { streamError, result } = await processMessage(proc);
+
+      expect(streamError!.message).toBe('Binary not found: claude');
+      expect(result?.error?.code).toBe('binary_not_found');
+    });
+
+    it('handles non-zero exit code with error in done event', async () => {
+      const proc = createMockProcess({
+        result: makeResult({ exitCode: 1, error: makeCliError({ message: 'Process exited with code 1' }) }),
+      });
+
+      const { interrupted, result } = await processMessage(proc);
+
+      expect(interrupted).toBe(true);
+      expect(result?.exitCode).toBe(1);
+      expect(result?.error?.code).toBe('fatal');
+    });
+
+    it('falls back to proc.done when stream errors before done event', async () => {
+      // Error set before iteration → for-await throws, no done event received
+      const queue = new EventQueue();
+      const expectedResult = makeResult({ exitCode: 1, error: makeCliError() });
+      queue.error(new Error('crash'));
+
+      const proc: CliProcess = {
+        pid: 99,
+        events: queue,
+        interrupt: vi.fn().mockResolvedValue(expectedResult),
+        done: Promise.reject(expectedResult),
+      };
+
+      const { result, streamError } = await processMessage(proc);
+
+      expect(streamError).not.toBeNull();
+      // Result comes from proc.done catch since no done event was received
+      expect(result).toEqual(expectedResult);
+    });
+
+    it('successful response has no errors', async () => {
+      const proc = createMockProcess();
+
+      const { interrupted, result, streamError } = await processMessage(proc);
+
+      expect(streamError).toBeNull();
+      expect(interrupted).toBe(false);
+      expect(result?.exitCode).toBe(0);
+      expect(result?.error).toBeNull();
+    });
+
+    it('rate limit result includes retryAfterMs for display', () => {
+      const error = makeCliError({
+        code: 'rate_limit',
+        retryAfterMs: 30000,
+      });
+
+      const retryMsg = error.retryAfterMs
+        ? ` (retry in ${Math.ceil(error.retryAfterMs / 1000)}s)`
+        : '';
+
+      expect(retryMsg).toBe(' (retry in 30s)');
+    });
+
+    it('rate limit without retryAfterMs shows no timing', () => {
+      const error = makeCliError({
+        code: 'rate_limit',
+        retryAfterMs: null,
+      });
+
+      const retryMsg = error.retryAfterMs
+        ? ` (retry in ${Math.ceil(error.retryAfterMs / 1000)}s)`
+        : '';
+
+      expect(retryMsg).toBe('');
     });
   });
 });

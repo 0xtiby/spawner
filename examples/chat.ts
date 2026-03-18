@@ -1,6 +1,6 @@
 import * as readline from 'node:readline';
 import { detectAll, spawn } from '../src/index.js';
-import type { CliName, CliProcess, DetectResult } from '../src/types.js';
+import type { CliName, CliProcess, CliResult, DetectResult } from '../src/types.js';
 
 const CYAN = '\x1b[36m';
 const GREEN = '\x1b[32m';
@@ -148,56 +148,94 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
       process.stdout.write(`${GREEN}Assistant: ${RESET}`);
       rl.pause();
 
-      const proc = spawn({
-        cli: selected.name,
-        prompt: trimmed,
-        cwd: process.cwd(),
-        autoApprove: true,
-      });
+      let proc: CliProcess | null = null;
+
+      try {
+        proc = spawn({
+          cli: selected.name,
+          prompt: trimmed,
+          cwd: process.cwd(),
+          autoApprove: true,
+        });
+      } catch (err) {
+        process.stdout.write(`\n${RED}Error: ${RESET}${err instanceof Error ? err.message : String(err)}\n`);
+        isStreaming = false;
+        activeProcess = null;
+        prompt();
+        return;
+      }
 
       isStreaming = true;
       activeProcess = proc;
 
       let interrupted = false;
+      let result: CliResult | null = null;
 
-      for await (const event of proc.events) {
-        switch (event.type) {
-          case 'text':
-            if (event.content) {
-              process.stdout.write(event.content);
-            }
-            break;
-          case 'tool_use':
-            if (event.tool?.name) {
-              process.stdout.write(`\n${YELLOW}⚙ Using ${event.tool.name}...${RESET}\n`);
-            }
-            break;
-          case 'error':
-            if (event.content) {
-              process.stdout.write(`\n${RED}Error: ${RESET}${event.content}\n`);
-            }
-            break;
-          case 'done':
-            if (event.result?.error) {
-              interrupted = true;
-            }
-            break;
-          case 'tool_result':
-          case 'system':
-            // Silently skip
-            break;
+      try {
+        for await (const event of proc.events) {
+          switch (event.type) {
+            case 'text':
+              if (event.content) {
+                process.stdout.write(event.content);
+              }
+              break;
+            case 'tool_use':
+              if (event.tool?.name) {
+                process.stdout.write(`\n${YELLOW}⚙ Using ${event.tool.name}...${RESET}\n`);
+              }
+              break;
+            case 'error':
+              if (event.content) {
+                process.stdout.write(`\n${RED}Error: ${RESET}${event.content}\n`);
+              }
+              break;
+            case 'done':
+              result = event.result ?? null;
+              if (event.result?.error) {
+                interrupted = true;
+              }
+              break;
+            case 'tool_result':
+            case 'system':
+              // Silently skip
+              break;
+          }
+        }
+      } catch (err) {
+        // Stream error — CLI crashed mid-response or binary disappeared
+        process.stdout.write(`\n${RED}Error: ${RESET}${err instanceof Error ? err.message : String(err)}\n`);
+      }
+
+      // If no result from done event, await the done promise for final status
+      if (!result) {
+        try {
+          result = await proc.done;
+        } catch (r) {
+          result = r as CliResult;
         }
       }
 
       isStreaming = false;
       activeProcess = null;
 
+      // Check result for specific error conditions
+      if (result?.error) {
+        if (result.error.code === 'rate_limit') {
+          const retryMsg = result.error.retryAfterMs
+            ? ` (retry in ${Math.ceil(result.error.retryAfterMs / 1000)}s)`
+            : '';
+          console.log(`${RED}Rate limited${RESET}${retryMsg} — try again`);
+        } else if (!interrupted) {
+          console.log(`${RED}Error: ${RESET}${result.error.message}`);
+        }
+      }
+
       if (interrupted) {
         console.log('\nResponse interrupted.');
-      } else {
+      } else if (!result?.error) {
         process.stdout.write('\n');
       }
-      rl.prompt();
+      prompt();
     });
   };
 
