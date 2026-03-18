@@ -36,6 +36,7 @@ export interface SpawnOptions {
   addDirs?: string[];
   ephemeral?: boolean;
   verbose?: boolean;
+  allowInteractiveTools?: boolean;
   abortSignal?: AbortSignal;
   extraArgs?: string[];
 }
