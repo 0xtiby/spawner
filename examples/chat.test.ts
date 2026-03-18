@@ -30,11 +30,32 @@ describe('chat example', () => {
     expect(available[1][0]).toBe('opencode');
   });
 
-  it('formats status line correctly', () => {
-    const displayName = 'Claude Code';
+  it('formats version as (vX.Y.Z) in selection list', () => {
     const version = '1.2.3';
-    const statusLine = `Using ${displayName} v${version} — type a message to begin, /exit to quit`;
+    const formatted = version ? `(v${version})` : '(version unknown)';
+    expect(formatted).toBe('(v1.2.3)');
+  });
+
+  it('shows (version unknown) in selection list when version is null', () => {
+    const version: string | null = null;
+    const formatted = version ? `(v${version})` : '(version unknown)';
+    expect(formatted).toBe('(version unknown)');
+  });
+
+  it('formats status line with version', () => {
+    const displayName = 'Claude Code';
+    const version: string | null = '1.2.3';
+    const versionSuffix = version ? ` v${version}` : '';
+    const statusLine = `Using ${displayName}${versionSuffix} — type a message to begin, /exit to quit`;
     expect(statusLine).toBe('Using Claude Code v1.2.3 — type a message to begin, /exit to quit');
+  });
+
+  it('formats status line without version when version is null', () => {
+    const displayName = 'Claude Code';
+    const version: string | null = null;
+    const versionSuffix = version ? ` v${version}` : '';
+    const statusLine = `Using ${displayName}${versionSuffix} — type a message to begin, /exit to quit`;
+    expect(statusLine).toBe('Using Claude Code — type a message to begin, /exit to quit');
   });
 
   it('formats unauthenticated CLI with warning', () => {
@@ -60,6 +81,35 @@ describe('chat example', () => {
       .filter(([, result]) => result.installed);
 
     expect(available).toHaveLength(0);
+  });
+
+  it('shows correct display names for multiple detected CLIs', () => {
+    const results: Record<CliName, DetectResult> = {
+      claude: { installed: true, version: '1.2.3', authenticated: true, binaryPath: '/usr/bin/claude' },
+      codex: { installed: true, version: null, authenticated: true, binaryPath: '/usr/bin/codex' },
+      opencode: { installed: true, version: '0.5.0', authenticated: false, binaryPath: '/usr/bin/opencode' },
+    };
+
+    const available = (Object.entries(results) as [CliName, DetectResult][])
+      .filter(([, result]) => result.installed)
+      .map(([name, result]) => {
+        const version = result.version ? `(v${result.version})` : '(version unknown)';
+        return `${DISPLAY_NAMES[name]} ${version}`;
+      });
+
+    expect(available).toEqual([
+      'Claude Code (v1.2.3)',
+      'Codex (version unknown)',
+      'OpenCode (v0.5.0)',
+    ]);
+  });
+
+  it('version formatting differs between list and status line', () => {
+    const version: string | null = '1.2.3';
+    const listFormat = version ? `(v${version})` : '(version unknown)';
+    const statusFormat = version ? ` v${version}` : '';
+    expect(listFormat).toBe('(v1.2.3)');
+    expect(statusFormat).toBe(' v1.2.3');
   });
 
   it('shows error message when no CLIs found', () => {

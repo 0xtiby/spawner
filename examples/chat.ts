@@ -35,7 +35,7 @@ async function selectCli(): Promise<AvailableCli> {
   console.log('\nSelect a CLI:');
   for (let i = 0; i < available.length; i++) {
     const cli = available[i];
-    const version = cli.result.version ? `(v${cli.result.version})` : '(unknown version)';
+    const version = cli.result.version ? `(v${cli.result.version})` : '(version unknown)';
     const authWarning = cli.result.authenticated ? '' : ' — not authenticated';
     console.log(`  ${i + 1}. ${cli.displayName} ${version}${authWarning}`);
   }
@@ -63,8 +63,8 @@ async function selectCli(): Promise<AvailableCli> {
 
 async function main() {
   const selected = await selectCli();
-  const version = selected.result.version ?? 'unknown';
-  console.log(`\nUsing ${selected.displayName} v${version} — type a message to begin, /exit to quit`);
+  const versionSuffix = selected.result.version ? ` v${selected.result.version}` : '';
+  console.log(`\nUsing ${selected.displayName}${versionSuffix} — type a message to begin, /exit to quit`);
 
   // Export selected CLI name for spec 02 to consume
   return selected;
