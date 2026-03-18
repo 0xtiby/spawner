@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { CliName, DetectResult } from '../src/types.js';
+import { isValidSelection } from './chat.js';
 
 // Test the display name mapping and selection logic without actually running readline
 describe('chat example', () => {
@@ -121,5 +122,47 @@ describe('chat example', () => {
     }
 
     expect(errorMessage).toBe('No supported CLIs found. Install claude, codex, or opencode.');
+  });
+
+  describe('isValidSelection', () => {
+    it('rejects non-numeric input', () => {
+      expect(isValidSelection('abc', 3)).toBe(false);
+    });
+
+    it('rejects empty input', () => {
+      expect(isValidSelection('', 3)).toBe(false);
+    });
+
+    it('rejects zero', () => {
+      expect(isValidSelection('0', 3)).toBe(false);
+    });
+
+    it('rejects negative numbers', () => {
+      expect(isValidSelection('-1', 3)).toBe(false);
+    });
+
+    it('rejects numbers above max options', () => {
+      expect(isValidSelection('5', 2)).toBe(false);
+    });
+
+    it('accepts valid selection at lower bound', () => {
+      expect(isValidSelection('1', 3)).toBe(true);
+    });
+
+    it('accepts valid selection at upper bound', () => {
+      expect(isValidSelection('3', 3)).toBe(true);
+    });
+
+    it('accepts valid selection in middle', () => {
+      expect(isValidSelection('2', 3)).toBe(true);
+    });
+
+    it('rejects whitespace-only input', () => {
+      expect(isValidSelection('   ', 3)).toBe(false);
+    });
+
+    it('rejects decimal numbers', () => {
+      expect(isValidSelection('1.5', 3)).toBe(true); // parseInt('1.5') === 1, which is valid
+    });
   });
 });

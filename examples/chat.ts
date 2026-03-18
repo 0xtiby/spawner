@@ -32,13 +32,17 @@ async function selectCli(): Promise<AvailableCli> {
     process.exit(1);
   }
 
-  console.log('\nSelect a CLI:');
-  for (let i = 0; i < available.length; i++) {
-    const cli = available[i];
-    const version = cli.result.version ? `(v${cli.result.version})` : '(version unknown)';
-    const authWarning = cli.result.authenticated ? '' : ' — not authenticated';
-    console.log(`  ${i + 1}. ${cli.displayName} ${version}${authWarning}`);
-  }
+  const printSelectionList = () => {
+    console.log('\nSelect a CLI:');
+    for (let i = 0; i < available.length; i++) {
+      const cli = available[i];
+      const version = cli.result.version ? `(v${cli.result.version})` : '(version unknown)';
+      const authWarning = cli.result.authenticated ? '' : ' — not authenticated';
+      console.log(`  ${i + 1}. ${cli.displayName} ${version}${authWarning}`);
+    }
+  };
+
+  printSelectionList();
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
@@ -46,10 +50,11 @@ async function selectCli(): Promise<AvailableCli> {
     const ask = () => {
       rl.question('\nEnter number: ', (answer) => {
         const num = parseInt(answer, 10);
-        if (num >= 1 && num <= available.length) {
+        if (!isNaN(num) && num >= 1 && num <= available.length) {
           resolve(num);
         } else {
           console.log('Invalid selection. Try again.');
+          printSelectionList();
           ask();
         }
       });
@@ -70,7 +75,12 @@ async function main() {
   return selected;
 }
 
-export { selectCli, main };
+function isValidSelection(input: string, maxOptions: number): boolean {
+  const num = parseInt(input, 10);
+  return !isNaN(num) && num >= 1 && num <= maxOptions;
+}
+
+export { selectCli, main, isValidSelection };
 export type { AvailableCli };
 
 main().catch((err) => {
