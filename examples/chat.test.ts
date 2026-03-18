@@ -573,6 +573,87 @@ describe('chat example', () => {
     });
   });
 
+  describe('session ID tracking', () => {
+    // Mirrors the sessionId capture logic in chatLoop
+    function simulateMessages(
+      responses: Array<{ sessionId: string | null; interrupted: boolean }>
+    ): string | undefined {
+      let sessionId: string | undefined;
+
+      for (const response of responses) {
+        // After each response, capture sessionId only on completed (non-interrupted) responses
+        if (!response.interrupted && response.sessionId) {
+          sessionId = response.sessionId;
+        }
+      }
+
+      return sessionId;
+    }
+
+    it('captures sessionId from first completed response', () => {
+      const result = simulateMessages([
+        { sessionId: 'sess-abc', interrupted: false },
+      ]);
+      expect(result).toBe('sess-abc');
+    });
+
+    it('passes captured sessionId to second spawn call', () => {
+      // Simulate two messages: after first completes, sessionId should be available
+      let sessionId: string | undefined;
+      const spawnCalls: Array<{ sessionId?: string }> = [];
+
+      // First message
+      spawnCalls.push({ sessionId });
+      // First response completes with sessionId
+      const firstResult = { sessionId: 'sess-123', error: null };
+      if (firstResult.sessionId) sessionId = firstResult.sessionId;
+
+      // Second message — should include sessionId
+      spawnCalls.push({ sessionId });
+
+      expect(spawnCalls[0].sessionId).toBeUndefined();
+      expect(spawnCalls[1].sessionId).toBe('sess-123');
+    });
+
+    it('updates sessionId after each successful response (handles rotation)', () => {
+      const result = simulateMessages([
+        { sessionId: 'sess-v1', interrupted: false },
+        { sessionId: 'sess-v2', interrupted: false },
+        { sessionId: 'sess-v3', interrupted: false },
+      ]);
+      expect(result).toBe('sess-v3');
+    });
+
+    it('continues without error when sessionId is null (e.g. Codex)', () => {
+      const result = simulateMessages([
+        { sessionId: null, interrupted: false },
+        { sessionId: null, interrupted: false },
+      ]);
+      expect(result).toBeUndefined();
+    });
+
+    it('preserves sessionId from last completed response on interrupt', () => {
+      const result = simulateMessages([
+        { sessionId: 'sess-good', interrupted: false },
+        { sessionId: 'sess-partial', interrupted: true }, // interrupted — should NOT update
+      ]);
+      expect(result).toBe('sess-good');
+    });
+
+    it('preserves sessionId when interrupted response has no sessionId', () => {
+      const result = simulateMessages([
+        { sessionId: 'sess-good', interrupted: false },
+        { sessionId: null, interrupted: true },
+      ]);
+      expect(result).toBe('sess-good');
+    });
+
+    it('sessionId starts undefined on first message', () => {
+      let sessionId: string | undefined;
+      expect(sessionId).toBeUndefined();
+    });
+  });
+
   describe('error handling', () => {
     // Simulates the core message-handling logic from chatLoop to test error paths
     function makeCliError(overrides: Partial<CliError> = {}): CliError {

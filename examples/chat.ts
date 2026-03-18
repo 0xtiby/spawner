@@ -115,6 +115,7 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
   let isStreaming = false;
+  let sessionId: string | undefined;
 
   rl.on('close', () => {
     cleanExit(0);
@@ -156,6 +157,7 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
           prompt: trimmed,
           cwd: process.cwd(),
           autoApprove: true,
+          sessionId,
         });
       } catch (err) {
         process.stdout.write(`\n${RED}Error: ${RESET}${err instanceof Error ? err.message : String(err)}\n`);
@@ -217,6 +219,11 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
 
       isStreaming = false;
       activeProcess = null;
+
+      // Capture sessionId from completed responses (preserve last good sessionId on interrupt)
+      if (!interrupted && result?.sessionId) {
+        sessionId = result.sessionId;
+      }
 
       // Check result for specific error conditions
       if (result?.error) {
