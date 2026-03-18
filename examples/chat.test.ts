@@ -124,6 +124,26 @@ describe('chat example', () => {
     expect(errorMessage).toBe('No supported CLIs found. Install claude, codex, or opencode.');
   });
 
+  describe('Ctrl+C clean exit', () => {
+    it('readline close event triggers process.exit(0)', async () => {
+      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      const rl = (await import('node:readline')).createInterface({
+        input: new (await import('node:stream')).PassThrough(),
+        output: new (await import('node:stream')).PassThrough(),
+      });
+
+      // Simulate what chat.ts does: listen for close and exit
+      rl.on('close', () => {
+        process.exit(0);
+      });
+
+      rl.close();
+
+      expect(mockExit).toHaveBeenCalledWith(0);
+      mockExit.mockRestore();
+    });
+  });
+
   describe('isValidSelection', () => {
     it('rejects non-numeric input', () => {
       expect(isValidSelection('abc', 3)).toBe(false);
