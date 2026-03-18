@@ -31,7 +31,7 @@ export const claudeAdapter: CliAdapter = {
   },
 
   buildCommand(options: SpawnOptions) {
-    const args: string[] = ['--print', '--output-format', 'stream-json', '--verbose'];
+    const args: string[] = ['--print', '--output-format', 'stream-json', '--verbose', '--disallowedTools', 'AskUserQuestion'];
 
     if (options.model) {
       args.push('--model', options.model);
