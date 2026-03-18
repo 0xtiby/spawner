@@ -2,21 +2,54 @@
   "name": "spawner",
   "version": "0.0.1",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xtiby/spawner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/0xtiby/spawner/issues"
+  },
+  "homepage": "https://github.com/0xtiby/spawner#readme",
+  "author": "0xtiby",
+  "license": "MIT",
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bootstrap": "bash scripts/bootstrap.sh",
+    "setup:branch-protection": "bash scripts/setup-branch-protection.sh"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.1",
+    "@semantic-release/npm": "^12.0.1",
+    "@semantic-release/release-notes-generator": "^14.0.3",
     "@types/node": "^25.5.0",
+    "semantic-release": "^24.2.3",
+    "tsup": "^8.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "vitest": "^3.1.0"
