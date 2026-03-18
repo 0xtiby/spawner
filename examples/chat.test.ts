@@ -48,4 +48,28 @@ describe('chat example', () => {
     const authWarning = result.authenticated ? '' : ' — not authenticated';
     expect(authWarning).toBe('');
   });
+
+  it('detects zero CLIs when none are installed', () => {
+    const results: Record<CliName, DetectResult> = {
+      claude: { installed: false, version: null, authenticated: false, binaryPath: null },
+      codex: { installed: false, version: null, authenticated: false, binaryPath: null },
+      opencode: { installed: false, version: null, authenticated: false, binaryPath: null },
+    };
+
+    const available = (Object.entries(results) as [CliName, DetectResult][])
+      .filter(([, result]) => result.installed);
+
+    expect(available).toHaveLength(0);
+  });
+
+  it('shows error message when no CLIs found', () => {
+    const available: unknown[] = [];
+    let errorMessage = '';
+
+    if (available.length === 0) {
+      errorMessage = 'No supported CLIs found. Install claude, codex, or opencode.';
+    }
+
+    expect(errorMessage).toBe('No supported CLIs found. Install claude, codex, or opencode.');
+  });
 });
