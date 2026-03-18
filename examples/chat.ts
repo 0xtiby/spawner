@@ -1,5 +1,5 @@
 import * as readline from 'node:readline';
-import { detectAll } from '../src/index.js';
+import { detectAll, spawn } from '../src/index.js';
 import type { CliName, DetectResult } from '../src/types.js';
 
 const DISPLAY_NAMES: Record<CliName, string> = {
@@ -70,13 +70,52 @@ async function selectCli(): Promise<AvailableCli> {
   return available[choice - 1];
 }
 
+async function chatLoop(selected: AvailableCli): Promise<void> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+  rl.on('close', () => {
+    process.exit(0);
+  });
+
+  const prompt = () => {
+    rl.question('> ', async (input) => {
+      const trimmed = input.trim();
+      if (!trimmed) {
+        prompt();
+        return;
+      }
+
+      console.log(`You: ${trimmed}`);
+      process.stdout.write('Assistant: ');
+      rl.pause();
+
+      const proc = spawn({
+        cli: selected.name,
+        prompt: trimmed,
+        cwd: process.cwd(),
+        autoApprove: true,
+      });
+
+      for await (const event of proc.events) {
+        if (event.type === 'text' && event.content) {
+          process.stdout.write(event.content);
+        }
+      }
+
+      process.stdout.write('\n');
+      rl.prompt();
+    });
+  };
+
+  prompt();
+}
+
 async function main() {
   const selected = await selectCli();
   const versionSuffix = selected.result.version ? ` v${selected.result.version}` : '';
   console.log(`\nUsing ${selected.displayName}${versionSuffix} — type a message to begin, /exit to quit`);
 
-  // Export selected CLI name for spec 02 to consume
-  return selected;
+  await chatLoop(selected);
 }
 
 function isValidSelection(input: string, maxOptions: number): boolean {
@@ -84,7 +123,7 @@ function isValidSelection(input: string, maxOptions: number): boolean {
   return !isNaN(num) && num >= 1 && num <= maxOptions;
 }
 
-export { selectCli, main, isValidSelection };
+export { selectCli, main, isValidSelection, chatLoop };
 export type { AvailableCli };
 
 main().catch((err) => {

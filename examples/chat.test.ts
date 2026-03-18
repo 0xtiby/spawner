@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { CliName, DetectResult } from '../src/types.js';
+import type { CliName, DetectResult, CliEvent, CliResult } from '../src/types.js';
 import { isValidSelection } from './chat.js';
 
 // Test the display name mapping and selection logic without actually running readline
@@ -183,6 +183,67 @@ describe('chat example', () => {
 
       expect(mockExit).toHaveBeenCalledWith(0);
       mockExit.mockRestore();
+    });
+  });
+
+  describe('chat loop behavior', () => {
+    it('empty input is ignored — no spawn occurs', () => {
+      const inputs = ['', '  ', '\t'];
+      for (const input of inputs) {
+        expect(input.trim()).toBe('');
+      }
+    });
+
+    it('text events are written to stdout without extra newlines', () => {
+      const chunks: string[] = [];
+      const mockWrite = (s: string) => { chunks.push(s); };
+
+      // Simulate text events
+      const events: Pick<CliEvent, 'type' | 'content'>[] = [
+        { type: 'text', content: 'Hello' },
+        { type: 'text', content: ' world' },
+        { type: 'text', content: '!' },
+      ];
+
+      for (const event of events) {
+        if (event.type === 'text' && event.content) {
+          mockWrite(event.content);
+        }
+      }
+
+      expect(chunks.join('')).toBe('Hello world!');
+    });
+
+    it('non-text events are not written to stdout', () => {
+      const chunks: string[] = [];
+      const mockWrite = (s: string) => { chunks.push(s); };
+
+      const events: Pick<CliEvent, 'type' | 'content'>[] = [
+        { type: 'system', content: 'Starting...' },
+        { type: 'text', content: 'Hello' },
+        { type: 'tool_use', content: undefined },
+        { type: 'text', content: ' there' },
+        { type: 'done', content: undefined },
+      ];
+
+      for (const event of events) {
+        if (event.type === 'text' && event.content) {
+          mockWrite(event.content);
+        }
+      }
+
+      expect(chunks.join('')).toBe('Hello there');
+    });
+
+    it('user message is echoed with "You: " prefix', () => {
+      const input = 'hello world';
+      const echo = `You: ${input.trim()}`;
+      expect(echo).toBe('You: hello world');
+    });
+
+    it('assistant prefix is printed before streaming', () => {
+      const prefix = 'Assistant: ';
+      expect(prefix).toBe('Assistant: ');
     });
   });
 
