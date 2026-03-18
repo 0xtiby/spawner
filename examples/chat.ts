@@ -97,8 +97,26 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
       });
 
       for await (const event of proc.events) {
-        if (event.type === 'text' && event.content) {
-          process.stdout.write(event.content);
+        switch (event.type) {
+          case 'text':
+            if (event.content) {
+              process.stdout.write(event.content);
+            }
+            break;
+          case 'tool_use':
+            if (event.tool?.name) {
+              process.stdout.write(`\n⚙ Using ${event.tool.name}...\n`);
+            }
+            break;
+          case 'error':
+            if (event.content) {
+              process.stdout.write(`\nError: ${event.content}\n`);
+            }
+            break;
+          case 'tool_result':
+          case 'system':
+            // Silently skip
+            break;
         }
       }
 
