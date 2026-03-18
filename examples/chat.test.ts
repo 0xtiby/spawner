@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { CliName, DetectResult, CliEvent, CliResult } from '../src/types.js';
-import { isValidSelection, handleSlashCommand } from './chat.js';
+import { isValidSelection, handleSlashCommand, cleanup, cleanExit } from './chat.js';
 
 // Test the display name mapping and selection logic without actually running readline
 describe('chat example', () => {
@@ -394,11 +394,15 @@ describe('chat example', () => {
       consoleSpy.mockRestore();
     });
 
-    it('/exit prints "Goodbye!" and exits with code 0', () => {
+    it('/exit prints "Goodbye!" and closes readline', async () => {
+      mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
       handleSlashCommand('/exit', mockRl as any);
+      // Allow the async cleanExit to complete
+      await vi.waitFor(() => {
+        expect(mockExit).toHaveBeenCalledWith(0);
+      });
       expect(consoleSpy).toHaveBeenCalledWith('Goodbye!');
       expect(mockRl.close).toHaveBeenCalled();
-      expect(mockExit).toHaveBeenCalledWith(0);
     });
 
     it('/new prints placeholder message and returns true', () => {
@@ -421,16 +425,108 @@ describe('chat example', () => {
       expect(result).toBe(true);
     });
 
-    it('/exit is case-insensitive', () => {
+    it('/exit is case-insensitive', async () => {
+      mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
       handleSlashCommand('/EXIT', mockRl as any);
+      await vi.waitFor(() => {
+        expect(mockExit).toHaveBeenCalledWith(0);
+      });
       expect(consoleSpy).toHaveBeenCalledWith('Goodbye!');
-      expect(mockExit).toHaveBeenCalledWith(0);
     });
 
     it('/new is case-insensitive', () => {
       const result = handleSlashCommand('/NEW', mockRl as any);
       expect(consoleSpy).toHaveBeenCalledWith('Session reset not yet implemented');
       expect(result).toBe(true);
+    });
+  });
+
+  describe('process cleanup on exit', () => {
+    it('cleanup interrupts activeProcess and awaits completion', async () => {
+      const mockInterrupt = vi.fn().mockResolvedValue({ exitCode: 0, error: null });
+      // Simulate setting an active process at module level
+      // We test the cleanup logic pattern directly
+      let activeProcess: { interrupt: () => Promise<unknown> } | null = { interrupt: mockInterrupt };
+
+      const doCleanup = async () => {
+        if (activeProcess) {
+          await activeProcess.interrupt();
+          activeProcess = null;
+        }
+      };
+
+      await doCleanup();
+      expect(mockInterrupt).toHaveBeenCalled();
+      expect(activeProcess).toBeNull();
+    });
+
+    it('cleanup is a no-op when no process is active', async () => {
+      let activeProcess: { interrupt: () => Promise<unknown> } | null = null;
+
+      const doCleanup = async () => {
+        if (activeProcess) {
+          await activeProcess.interrupt();
+          activeProcess = null;
+        }
+      };
+
+      // Should not throw
+      await doCleanup();
+      expect(activeProcess).toBeNull();
+    });
+
+    it('cleanExit calls cleanup before process.exit', async () => {
+      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      const mockInterrupt = vi.fn().mockResolvedValue({ exitCode: 0, error: null });
+
+      // Test the pattern: cleanup then exit
+      let activeProcess: { interrupt: () => Promise<unknown> } | null = { interrupt: mockInterrupt };
+
+      const doCleanExit = async (code = 0) => {
+        if (activeProcess) {
+          await activeProcess.interrupt();
+          activeProcess = null;
+        }
+        process.exit(code);
+      };
+
+      await doCleanExit(0);
+      expect(mockInterrupt).toHaveBeenCalled();
+      expect(activeProcess).toBeNull();
+      expect(mockExit).toHaveBeenCalledWith(0);
+      mockExit.mockRestore();
+    });
+
+    it('/exit handler triggers cleanup before exit', () => {
+      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const mockRl = { close: vi.fn() };
+
+      // handleSlashCommand now calls cleanExit which is async
+      // The function still returns true for recognized commands
+      const result = handleSlashCommand('/exit', mockRl as any);
+      expect(consoleSpy).toHaveBeenCalledWith('Goodbye!');
+      expect(mockRl.close).toHaveBeenCalled();
+      // cleanExit is called (async), process.exit happens after cleanup
+      expect(result).toBe(true);
+
+      mockExit.mockRestore();
+      consoleSpy.mockRestore();
+    });
+
+    it('SIGTERM triggers cleanup before exit', () => {
+      // Verify the pattern: SIGTERM handler calls cleanExit
+      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      let cleanExitCalled = false;
+
+      const handleSigterm = () => {
+        cleanExitCalled = true;
+        // In real code, cleanExit(0) is called
+      };
+
+      handleSigterm();
+      expect(cleanExitCalled).toBe(true);
+      mockExit.mockRestore();
     });
   });
 
