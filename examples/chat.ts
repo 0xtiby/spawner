@@ -91,170 +91,187 @@ async function selectCli(): Promise<AvailableCli> {
   return available[choice - 1];
 }
 
-function handleSlashCommand(command: string, rl: readline.Interface): boolean {
+type SlashAction = 'exit' | 'new' | 'unknown';
+
+function handleSlashCommand(command: string, rl: readline.Interface): SlashAction {
   const cmd = command.toLowerCase();
 
   if (cmd === '/exit') {
     console.log('Goodbye!');
     rl.close();
     void cleanExit(0);
-    return true;
+    return 'exit';
   }
 
   if (cmd === '/new') {
-    console.log('Session reset not yet implemented');
-    return true;
+    return 'new';
   }
 
   // Unknown slash command
   console.log(`Unknown command: ${command.split(/\s/)[0]}`);
-  return true;
+  return 'unknown';
 }
 
-async function chatLoop(selected: AvailableCli): Promise<void> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+async function chatLoop(selected: AvailableCli): Promise<SlashAction> {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-  let isStreaming = false;
-  let sessionId: string | undefined;
+    let isStreaming = false;
+    let sessionId: string | undefined;
 
-  rl.on('close', () => {
-    cleanExit(0);
-  });
+    rl.on('close', () => {
+      // Only cleanExit if not resolved by /new
+    });
 
-  rl.on('SIGINT', () => {
-    if (isStreaming && activeProcess) {
-      activeProcess.interrupt();
-      return;
-    }
-    console.log();
-    rl.close();
-    cleanExit(0);
-  });
-
-  const prompt = () => {
-    rl.question('> ', async (input) => {
-      const trimmed = input.trim();
-      if (!trimmed) {
-        prompt();
+    rl.on('SIGINT', () => {
+      if (isStreaming && activeProcess) {
+        activeProcess.interrupt();
         return;
       }
+      console.log();
+      rl.close();
+      cleanExit(0);
+    });
 
-      if (trimmed.startsWith('/')) {
-        handleSlashCommand(trimmed, rl);
-        prompt();
-        return;
-      }
+    const prompt = () => {
+      rl.question('> ', async (input) => {
+        const trimmed = input.trim();
+        if (!trimmed) {
+          prompt();
+          return;
+        }
 
-      console.log(`${CYAN}You: ${RESET}${trimmed}`);
-      process.stdout.write(`${GREEN}Assistant: ${RESET}`);
-      rl.pause();
+        if (trimmed.startsWith('/')) {
+          const action = handleSlashCommand(trimmed, rl);
+          if (action === 'new') {
+            console.log('Starting new session...');
+            rl.close();
+            resolve('new');
+            return;
+          }
+          if (action === 'exit') {
+            resolve('exit');
+            return;
+          }
+          prompt();
+          return;
+        }
 
-      let proc: CliProcess | null = null;
+        console.log(`${CYAN}You: ${RESET}${trimmed}`);
+        process.stdout.write(`${GREEN}Assistant: ${RESET}`);
+        rl.pause();
 
-      try {
-        proc = spawn({
-          cli: selected.name,
-          prompt: trimmed,
-          cwd: process.cwd(),
-          autoApprove: true,
-          sessionId,
-        });
-      } catch (err) {
-        process.stdout.write(`\n${RED}Error: ${RESET}${err instanceof Error ? err.message : String(err)}\n`);
-        isStreaming = false;
-        activeProcess = null;
-        prompt();
-        return;
-      }
+        let proc: CliProcess | null = null;
 
-      isStreaming = true;
-      activeProcess = proc;
+        try {
+          proc = spawn({
+            cli: selected.name,
+            prompt: trimmed,
+            cwd: process.cwd(),
+            autoApprove: true,
+            sessionId,
+          });
+        } catch (err) {
+          process.stdout.write(`\n${RED}Error: ${RESET}${err instanceof Error ? err.message : String(err)}\n`);
+          isStreaming = false;
+          activeProcess = null;
+          prompt();
+          return;
+        }
 
-      let interrupted = false;
-      let result: CliResult | null = null;
+        isStreaming = true;
+        activeProcess = proc;
 
-      try {
-        for await (const event of proc.events) {
-          switch (event.type) {
-            case 'text':
-              if (event.content) {
-                process.stdout.write(event.content);
-              }
-              break;
-            case 'tool_use':
-              if (event.tool?.name) {
-                process.stdout.write(`\n${YELLOW}⚙ Using ${event.tool.name}...${RESET}\n`);
-              }
-              break;
-            case 'error':
-              if (event.content) {
-                process.stdout.write(`\n${RED}Error: ${RESET}${event.content}\n`);
-              }
-              break;
-            case 'done':
-              result = event.result ?? null;
-              if (event.result?.error) {
-                interrupted = true;
-              }
-              break;
-            case 'tool_result':
-            case 'system':
-              // Silently skip
-              break;
+        let interrupted = false;
+        let result: CliResult | null = null;
+
+        try {
+          for await (const event of proc.events) {
+            switch (event.type) {
+              case 'text':
+                if (event.content) {
+                  process.stdout.write(event.content);
+                }
+                break;
+              case 'tool_use':
+                if (event.tool?.name) {
+                  process.stdout.write(`\n${YELLOW}⚙ Using ${event.tool.name}...${RESET}\n`);
+                }
+                break;
+              case 'error':
+                if (event.content) {
+                  process.stdout.write(`\n${RED}Error: ${RESET}${event.content}\n`);
+                }
+                break;
+              case 'done':
+                result = event.result ?? null;
+                if (event.result?.error) {
+                  interrupted = true;
+                }
+                break;
+              case 'tool_result':
+              case 'system':
+                // Silently skip
+                break;
+            }
+          }
+        } catch (err) {
+          // Stream error — CLI crashed mid-response or binary disappeared
+          process.stdout.write(`\n${RED}Error: ${RESET}${err instanceof Error ? err.message : String(err)}\n`);
+        }
+
+        // If no result from done event, await the done promise for final status
+        if (!result) {
+          try {
+            result = await proc.done;
+          } catch (r) {
+            result = r as CliResult;
           }
         }
-      } catch (err) {
-        // Stream error — CLI crashed mid-response or binary disappeared
-        process.stdout.write(`\n${RED}Error: ${RESET}${err instanceof Error ? err.message : String(err)}\n`);
-      }
 
-      // If no result from done event, await the done promise for final status
-      if (!result) {
-        try {
-          result = await proc.done;
-        } catch (r) {
-          result = r as CliResult;
+        isStreaming = false;
+        activeProcess = null;
+
+        // Capture sessionId from completed responses (preserve last good sessionId on interrupt)
+        if (!interrupted && result?.sessionId) {
+          sessionId = result.sessionId;
         }
-      }
 
-      isStreaming = false;
-      activeProcess = null;
-
-      // Capture sessionId from completed responses (preserve last good sessionId on interrupt)
-      if (!interrupted && result?.sessionId) {
-        sessionId = result.sessionId;
-      }
-
-      // Check result for specific error conditions
-      if (result?.error) {
-        if (result.error.code === 'rate_limit') {
-          const retryMsg = result.error.retryAfterMs
-            ? ` (retry in ${Math.ceil(result.error.retryAfterMs / 1000)}s)`
-            : '';
-          console.log(`${RED}Rate limited${RESET}${retryMsg} — try again`);
-        } else if (!interrupted) {
-          console.log(`${RED}Error: ${RESET}${result.error.message}`);
+        // Check result for specific error conditions
+        if (result?.error) {
+          if (result.error.code === 'rate_limit') {
+            const retryMsg = result.error.retryAfterMs
+              ? ` (retry in ${Math.ceil(result.error.retryAfterMs / 1000)}s)`
+              : '';
+            console.log(`${RED}Rate limited${RESET}${retryMsg} — try again`);
+          } else if (!interrupted) {
+            console.log(`${RED}Error: ${RESET}${result.error.message}`);
+          }
         }
-      }
 
-      if (interrupted) {
-        console.log('\nResponse interrupted.');
-      } else if (!result?.error) {
-        process.stdout.write('\n');
-      }
-      prompt();
-    });
-  };
+        if (interrupted) {
+          console.log('\nResponse interrupted.');
+        } else if (!result?.error) {
+          process.stdout.write('\n');
+        }
+        prompt();
+      });
+    };
 
-  prompt();
+    prompt();
+  });
 }
 
 async function main() {
-  const selected = await selectCli();
-  const versionSuffix = selected.result.version ? ` v${selected.result.version}` : '';
-  console.log(`\nUsing ${selected.displayName}${versionSuffix} — type a message to begin, /exit to quit`);
+  let action: SlashAction = 'new';
 
-  await chatLoop(selected);
+  while (action === 'new') {
+    const selected = await selectCli();
+    const versionSuffix = selected.result.version ? ` v${selected.result.version}` : '';
+    console.log(`\nUsing ${selected.displayName}${versionSuffix} — type a message to begin, /exit to quit`);
+
+    action = await chatLoop(selected);
+  }
 }
 
 function isValidSelection(input: string, maxOptions: number): boolean {
@@ -263,7 +280,7 @@ function isValidSelection(input: string, maxOptions: number): boolean {
 }
 
 export { selectCli, main, isValidSelection, handleSlashCommand, chatLoop, cleanup, cleanExit, CYAN, GREEN, YELLOW, RED, RESET };
-export type { AvailableCli };
+export type { AvailableCli, SlashAction };
 
 const isMainModule = process.argv[1]?.endsWith('chat.ts') || process.argv[1]?.endsWith('chat.js');
 
