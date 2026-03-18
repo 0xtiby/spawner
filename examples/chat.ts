@@ -47,6 +47,10 @@ async function selectCli(): Promise<AvailableCli> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
   const choice = await new Promise<number>((resolve) => {
+    rl.on('close', () => {
+      process.exit(0);
+    });
+
     const ask = () => {
       rl.question('\nEnter number: ', (answer) => {
         const num = parseInt(answer, 10);
