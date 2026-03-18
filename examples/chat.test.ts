@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { CliName, DetectResult, CliEvent, CliResult } from '../src/types.js';
-import { isValidSelection } from './chat.js';
+import { isValidSelection, handleSlashCommand } from './chat.js';
 
 // Test the display name mapping and selection logic without actually running readline
 describe('chat example', () => {
@@ -285,6 +285,62 @@ describe('chat example', () => {
         expect(label).toContain(RESET);
         expect(label.endsWith(RESET)).toBe(true);
       }
+    });
+  });
+
+  describe('handleSlashCommand', () => {
+    let mockRl: { close: ReturnType<typeof vi.fn> };
+    let mockExit: ReturnType<typeof vi.spyOn>;
+    let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(async () => {
+      mockRl = { close: vi.fn() };
+      mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      mockExit.mockRestore();
+      consoleSpy.mockRestore();
+    });
+
+    it('/exit prints "Goodbye!" and exits with code 0', () => {
+      handleSlashCommand('/exit', mockRl as any);
+      expect(consoleSpy).toHaveBeenCalledWith('Goodbye!');
+      expect(mockRl.close).toHaveBeenCalled();
+      expect(mockExit).toHaveBeenCalledWith(0);
+    });
+
+    it('/new prints placeholder message and returns true', () => {
+      const result = handleSlashCommand('/new', mockRl as any);
+      expect(consoleSpy).toHaveBeenCalledWith('Session reset not yet implemented');
+      expect(result).toBe(true);
+      expect(mockExit).not.toHaveBeenCalled();
+    });
+
+    it('unknown /command prints error with command name', () => {
+      const result = handleSlashCommand('/foo', mockRl as any);
+      expect(consoleSpy).toHaveBeenCalledWith('Unknown command: /foo');
+      expect(result).toBe(true);
+      expect(mockExit).not.toHaveBeenCalled();
+    });
+
+    it('unknown /command with args only shows command part', () => {
+      const result = handleSlashCommand('/foo bar baz', mockRl as any);
+      expect(consoleSpy).toHaveBeenCalledWith('Unknown command: /foo');
+      expect(result).toBe(true);
+    });
+
+    it('/exit is case-insensitive', () => {
+      handleSlashCommand('/EXIT', mockRl as any);
+      expect(consoleSpy).toHaveBeenCalledWith('Goodbye!');
+      expect(mockExit).toHaveBeenCalledWith(0);
+    });
+
+    it('/new is case-insensitive', () => {
+      const result = handleSlashCommand('/NEW', mockRl as any);
+      expect(consoleSpy).toHaveBeenCalledWith('Session reset not yet implemented');
+      expect(result).toBe(true);
     });
   });
 
