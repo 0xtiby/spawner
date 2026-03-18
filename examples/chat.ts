@@ -20,6 +20,21 @@ interface AvailableCli {
   result: DetectResult;
 }
 
+let activeProcess: CliProcess | null = null;
+
+async function cleanup(): Promise<void> {
+  if (activeProcess) {
+    await activeProcess.interrupt();
+    activeProcess = null;
+  }
+}
+
+function cleanExit(code = 0): void {
+  cleanup().finally(() => {
+    try { process.exit(code); } catch { /* process.exit may throw in test environments */ }
+  });
+}
+
 async function selectCli(): Promise<AvailableCli> {
   console.log('Detecting available CLIs...');
 
@@ -82,7 +97,8 @@ function handleSlashCommand(command: string, rl: readline.Interface): boolean {
   if (cmd === '/exit') {
     console.log('Goodbye!');
     rl.close();
-    process.exit(0);
+    void cleanExit(0);
+    return true;
   }
 
   if (cmd === '/new') {
@@ -99,10 +115,9 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
   let isStreaming = false;
-  let activeProcess: CliProcess | null = null;
 
   rl.on('close', () => {
-    process.exit(0);
+    cleanExit(0);
   });
 
   rl.on('SIGINT', () => {
@@ -112,7 +127,7 @@ async function chatLoop(selected: AvailableCli): Promise<void> {
     }
     console.log();
     rl.close();
-    process.exit(0);
+    cleanExit(0);
   });
 
   const prompt = () => {
@@ -202,10 +217,18 @@ function isValidSelection(input: string, maxOptions: number): boolean {
   return !isNaN(num) && num >= 1 && num <= maxOptions;
 }
 
-export { selectCli, main, isValidSelection, handleSlashCommand, chatLoop, CYAN, GREEN, YELLOW, RED, RESET };
+export { selectCli, main, isValidSelection, handleSlashCommand, chatLoop, cleanup, cleanExit, CYAN, GREEN, YELLOW, RED, RESET };
 export type { AvailableCli };
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isMainModule = process.argv[1]?.endsWith('chat.ts') || process.argv[1]?.endsWith('chat.js');
+
+if (isMainModule) {
+  process.on('SIGTERM', () => {
+    cleanExit(0);
+  });
+
+  main().catch((err) => {
+    console.error(err);
+    cleanExit(1);
+  });
+}
