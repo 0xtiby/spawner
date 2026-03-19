@@ -344,6 +344,8 @@ async function spawnWithRetry(options: Parameters<typeof spawn>[0], maxRetries =
 
 ## Known Models
 
+> **Note:** This list may not reflect the latest models available in each CLI. Refer to the official documentation of each provider for the most up-to-date model list.
+
 | Model | Provider | CLI | Context Window | Effort Support |
 |---|---|---|---|---|
 | Claude Sonnet 4 | Anthropic | claude | 200k | Yes |
