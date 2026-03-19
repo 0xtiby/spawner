@@ -4,3 +4,9 @@ dist/
 .DS_Store
 docs
 .npmrc
+.agents/
+.beads/
+.claude/
+.codex/
+.eni/
+.opencode/
