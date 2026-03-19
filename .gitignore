@@ -9,3 +9,7 @@ docs
 .codex/
 .eni/
 .opencode/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
