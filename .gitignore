@@ -2,14 +2,4 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
-docs
 .npmrc
-.agents/
-.claude/
-.codex/
-.eni/
-.opencode/
-
-# Dolt database files (added by bd init)
-.dolt/
-*.db
