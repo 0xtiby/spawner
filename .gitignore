@@ -5,7 +5,6 @@ dist/
 docs
 .npmrc
 .agents/
-.beads/
 .claude/
 .codex/
 .eni/
