@@ -13,11 +13,11 @@ Each AI coding CLI has its own binary, arguments, output format, and error behav
 ## Quick Start
 
 ```bash
-pnpm add spawner
+pnpm add @0xtiby/spawner
 ```
 
 ```typescript
-import { spawn } from 'spawner';
+import { spawn } from '@0xtiby/spawner';
 
 const process = spawn({
   cli: 'claude',
@@ -61,11 +61,11 @@ You also need at least one supported CLI installed and authenticated:
 - [OpenCode](https://github.com/sst/opencode) (`opencode`)
 
 ```bash
-pnpm add spawner
+pnpm add @0xtiby/spawner
 # or
-npm install spawner
+npm install @0xtiby/spawner
 # or
-yarn add spawner
+yarn add @0xtiby/spawner
 ```
 
 ## Usage
@@ -75,7 +75,7 @@ yarn add spawner
 `spawn()` is the main entry point. It returns a `CliProcess` with an async iterable of events and a promise that resolves when the process exits.
 
 ```typescript
-import { spawn } from 'spawner';
+import { spawn } from '@0xtiby/spawner';
 
 const proc = spawn({
   cli: 'codex',
@@ -138,7 +138,7 @@ const result = await proc.interrupt(5000); // 5s grace period (default)
 ### Detecting Installed CLIs
 
 ```typescript
-import { detect, detectAll } from 'spawner';
+import { detect, detectAll } from '@0xtiby/spawner';
 
 // Check a single CLI
 const claude = await detect('claude');
@@ -154,7 +154,7 @@ const all = await detectAll();
 If you have captured JSONL output from a previous CLI run, parse it without spawning a process:
 
 ```typescript
-import { extract } from 'spawner';
+import { extract } from '@0xtiby/spawner';
 
 const result = extract({
   cli: 'claude',
@@ -170,7 +170,7 @@ console.log(result.usage);
 Classify raw stderr/stdout into structured error codes:
 
 ```typescript
-import { classifyError } from 'spawner';
+import { classifyError } from '@0xtiby/spawner';
 
 const error = classifyError('claude', 1, 'Rate limit exceeded. Try again in 30 seconds.', '');
 // {
@@ -185,7 +185,7 @@ const error = classifyError('claude', 1, 'Rate limit exceeded. Try again in 30 s
 ### Querying the Model Registry
 
 ```typescript
-import { KNOWN_MODELS, getKnownModels, listModels } from 'spawner';
+import { KNOWN_MODELS, getKnownModels, listModels } from '@0xtiby/spawner';
 
 // All known models
 console.log(KNOWN_MODELS);
@@ -322,7 +322,7 @@ Spawner classifies CLI errors into typed error codes so you can handle them prog
 ### Retry Example
 
 ```typescript
-import { spawn, type CliResult } from 'spawner';
+import { spawn, type CliResult } from '@0xtiby/spawner';
 
 async function spawnWithRetry(options: Parameters<typeof spawn>[0], maxRetries = 3): Promise<CliResult> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
