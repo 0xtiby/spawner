@@ -101,16 +101,20 @@ export interface ExtractOptions {
   rawOutput: string;
 }
 
+/**
+ * Options for listing models.
+ * When both `cli` and `provider` are set, `provider` takes precedence.
+ */
 export interface ListModelsOptions {
   cli?: CliName;
   provider?: string;
+  fallback?: KnownModel[];
 }
 
 export interface KnownModel {
   id: string;
   name: string;
-  provider: 'anthropic' | 'openai' | 'other';
-  cli: CliName[];
+  provider: string;
   contextWindow: number | null;
   supportsEffort: boolean;
 }
