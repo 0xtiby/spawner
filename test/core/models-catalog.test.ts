@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   toKnownModel,
   transformCatalog,
@@ -8,17 +6,15 @@ import {
   ensureCache,
   getCache,
   clearCache,
-  invalidateAndFetch,
+  refreshCache,
   ModelsFetchError,
   MODELS_DEV_URL,
   CACHE_TTL_MS,
   type ModelsDevRawModel,
   type ModelsDevRawResponse,
 } from '../../src/core/models-catalog.js';
+import { fixtureJson, fixtureData, mockFetchSuccess, mockFetchFailure } from '../helpers/mock-fetch.js';
 
-const fixturePath = resolve(__dirname, '../fixtures/models-dev-sample.json');
-const fixtureJson = readFileSync(fixturePath, 'utf8');
-const fixtureData = JSON.parse(fixtureJson);
 const fixture = fixtureData as ModelsDevRawResponse;
 
 describe('toKnownModel', () => {
@@ -57,19 +53,19 @@ describe('toKnownModel', () => {
     expect(result.supportsEffort).toBe(true);
   });
 
-  it('maps provider "anthropic" correctly', () => {
+  it('preserves provider id as-is for anthropic', () => {
     const raw: ModelsDevRawModel = { id: 'test', name: 'Test' };
     expect(toKnownModel('anthropic', raw).provider).toBe('anthropic');
   });
 
-  it('maps provider "openai" correctly', () => {
+  it('preserves provider id as-is for openai', () => {
     const raw: ModelsDevRawModel = { id: 'test', name: 'Test' };
     expect(toKnownModel('openai', raw).provider).toBe('openai');
   });
 
-  it('maps unknown provider "google" to "other"', () => {
+  it('preserves provider id as-is for google', () => {
     const raw: ModelsDevRawModel = { id: 'test', name: 'Test' };
-    expect(toKnownModel('google', raw).provider).toBe('other');
+    expect(toKnownModel('google', raw).provider).toBe('google');
   });
 
   it('does not include cli field', () => {
@@ -79,9 +75,9 @@ describe('toKnownModel', () => {
 });
 
 describe('transformCatalog', () => {
-  it('transforms fixture with correct provider count', () => {
+  it('transforms fixture with correct provider count (excludes empty)', () => {
     const result = transformCatalog(fixture);
-    expect(result.size).toBe(4);
+    expect(result.size).toBe(3);
   });
 
   it('transforms anthropic provider with 2 models', () => {
@@ -98,10 +94,9 @@ describe('transformCatalog', () => {
     expect(openai[0].id).toBe('gpt-4o');
   });
 
-  it('includes empty provider with empty array', () => {
+  it('excludes empty providers', () => {
     const result = transformCatalog(fixture);
-    const empty = result.get('empty-provider')!;
-    expect(empty).toEqual([]);
+    expect(result.has('empty-provider')).toBe(false);
   });
 
   it('skips malformed entry without models dict', () => {
@@ -111,7 +106,7 @@ describe('transformCatalog', () => {
     };
     const result = transformCatalog(raw);
     expect(result.has('broken')).toBe(false);
-    expect(result.size).toBe(4); // original 4 providers only
+    expect(result.size).toBe(3);
   });
 });
 
@@ -127,19 +122,13 @@ describe('fetchCatalog', () => {
   });
 
   it('returns parsed JSON on successful fetch', async () => {
-    globalThis.fetch = vi.fn().mockImplementation(() =>
-      Promise.resolve(new Response(fixtureJson, { status: 200 })),
-    );
-
+    mockFetchSuccess();
     const result = await fetchCatalog();
     expect(result).toEqual(fixtureData);
   });
 
   it('calls fetch with correct URL and AbortSignal', async () => {
-    globalThis.fetch = vi.fn().mockImplementation(() =>
-      Promise.resolve(new Response(fixtureJson, { status: 200 })),
-    );
-
+    mockFetchSuccess();
     await fetchCatalog();
     expect(globalThis.fetch).toHaveBeenCalledWith(
       MODELS_DEV_URL,
@@ -169,7 +158,7 @@ describe('fetchCatalog', () => {
 
   it('throws ModelsFetchError with cause on network error', async () => {
     const networkError = new TypeError('fetch failed');
-    globalThis.fetch = vi.fn().mockRejectedValue(networkError);
+    mockFetchFailure(networkError);
 
     const err = await fetchCatalog().catch((e) => e);
     expect(err).toBeInstanceOf(ModelsFetchError);
@@ -187,7 +176,7 @@ describe('fetchCatalog', () => {
     expect(err.cause).toBeInstanceOf(Error);
   });
 
-  it('throws ModelsFetchError when Content-Length exceeds 10MB', async () => {
+  it('throws ModelsFetchError when Content-Length exceeds limit', async () => {
     globalThis.fetch = vi.fn().mockImplementation(() =>
       Promise.resolve(new Response('{}', {
         status: 200,
@@ -204,16 +193,6 @@ describe('fetchCatalog', () => {
 describe('ensureCache', () => {
   const originalFetch = globalThis.fetch;
 
-  function mockFetchSuccess() {
-    globalThis.fetch = vi.fn().mockImplementation(() =>
-      Promise.resolve(new Response(fixtureJson, { status: 200 })),
-    );
-  }
-
-  function mockFetchFailure() {
-    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
-  }
-
   beforeEach(() => {
     clearCache();
     vi.restoreAllMocks();
@@ -229,7 +208,7 @@ describe('ensureCache', () => {
     const result = await ensureCache();
     expect(result.stale).toBe(false);
     expect(result.data).toBeInstanceOf(Map);
-    expect(result.data.size).toBe(4);
+    expect(result.data.size).toBe(3);
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -280,7 +259,7 @@ describe('ensureCache', () => {
     mockFetchFailure();
     const result = await ensureCache();
     expect(result.stale).toBe(true);
-    expect(result.data.size).toBe(4);
+    expect(result.data.size).toBe(3);
   });
 
   it('throws ModelsFetchError when no cache and fetch fails', async () => {
@@ -296,7 +275,7 @@ describe('ensureCache', () => {
     mockFetchSuccess();
     const result = await ensureCache();
     expect(result.stale).toBe(false);
-    expect(result.data.size).toBe(4);
+    expect(result.data.size).toBe(3);
   });
 
   it('clearCache then ensureCache triggers fresh fetch', async () => {
@@ -310,18 +289,8 @@ describe('ensureCache', () => {
   });
 });
 
-describe('invalidateAndFetch', () => {
+describe('refreshCache', () => {
   const originalFetch = globalThis.fetch;
-
-  function mockFetchSuccess() {
-    globalThis.fetch = vi.fn().mockImplementation(() =>
-      Promise.resolve(new Response(fixtureJson, { status: 200 })),
-    );
-  }
-
-  function mockFetchFailure() {
-    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
-  }
 
   beforeEach(() => {
     clearCache();
@@ -339,10 +308,10 @@ describe('invalidateAndFetch', () => {
     const oldCache = getCache();
 
     mockFetchSuccess();
-    const result = await invalidateAndFetch();
+    const result = await refreshCache();
     expect(result).not.toBe(oldCache);
     expect(result.stale).toBe(false);
-    expect(result.data.size).toBe(4);
+    expect(result.data.size).toBe(3);
   });
 
   it('preserves existing cache on failure and throws', async () => {
@@ -351,14 +320,14 @@ describe('invalidateAndFetch', () => {
     const cachedBefore = getCache();
 
     mockFetchFailure();
-    const err = await invalidateAndFetch().catch((e) => e);
+    const err = await refreshCache().catch((e) => e);
     expect(err).toBeInstanceOf(ModelsFetchError);
     expect(getCache()).toBe(cachedBefore);
   });
 
   it('throws when no existing cache and fetch fails', async () => {
     mockFetchFailure();
-    const err = await invalidateAndFetch().catch((e) => e);
+    const err = await refreshCache().catch((e) => e);
     expect(err).toBeInstanceOf(ModelsFetchError);
     expect(getCache()).toBeNull();
   });
@@ -372,7 +341,7 @@ describe('ModelsFetchError', () => {
     expect(err.name).toBe('ModelsFetchError');
   });
 
-  it('carries cause', () => {
+  it('carries cause via super()', () => {
     const cause = new Error('network failure');
     const err = new ModelsFetchError('fetch failed', { cause });
     expect(err.cause).toBe(cause);

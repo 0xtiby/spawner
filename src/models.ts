@@ -1,20 +1,14 @@
 import type { CliName, KnownModel, ListModelsOptions } from './types.js';
-import { ensureCache, invalidateAndFetch } from './core/models-catalog.js';
+import { ensureCache, refreshCache } from './core/models-catalog.js';
 import { createDebugLogger } from './core/debug.js';
 
-// --- Debug logger ---
-
 const log = createDebugLogger();
-
-// --- Provider mapping ---
 
 export const CLI_PROVIDER_MAP: Record<CliName, string | null> = {
   claude: 'anthropic',
   codex: 'openai',
   opencode: null,
 };
-
-// --- Public API ---
 
 export async function listModels(options?: ListModelsOptions): Promise<KnownModel[]> {
   let cache;
@@ -28,7 +22,6 @@ export async function listModels(options?: ListModelsOptions): Promise<KnownMode
     throw err;
   }
 
-  // Determine provider filter
   let providerFilter: string | null = null;
   if (options?.provider) {
     providerFilter = options.provider;
@@ -38,7 +31,6 @@ export async function listModels(options?: ListModelsOptions): Promise<KnownMode
     log?.(`listModels: filtering by cli=${options.cli} → provider=${providerFilter}`);
   }
 
-  // Collect models from cache
   let models: KnownModel[] = [];
   if (providerFilter) {
     const providerModels = cache.data.get(providerFilter);
@@ -51,7 +43,6 @@ export async function listModels(options?: ListModelsOptions): Promise<KnownMode
     }
   }
 
-  // Sort alphabetically by id
   models.sort((a, b) => a.id.localeCompare(b.id, 'en'));
 
   log?.(`listModels: returning ${models.length} models (cache ${cache.stale ? 'stale' : 'fresh'})`);
@@ -64,11 +55,6 @@ export async function getKnownModels(cli?: CliName, fallbackModels?: KnownModel[
 
 export async function refreshModels(): Promise<void> {
   log?.('refreshModels: refreshing cache');
-  try {
-    await invalidateAndFetch();
-    log?.('refreshModels: cache refreshed successfully');
-  } catch (err) {
-    log?.('refreshModels: refresh failed, cache preserved');
-    throw err;
-  }
+  await refreshCache();
+  log?.('refreshModels: cache refreshed');
 }

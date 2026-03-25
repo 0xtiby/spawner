@@ -1,4 +1,3 @@
-// --- Public types ---
 export type {
   CliName,
   CliEvent,
@@ -15,7 +14,6 @@ export type {
   ListModelsOptions,
 } from './types.js';
 
-// --- Models registry ---
 export { getKnownModels, listModels, refreshModels } from './models.js';
 
 export { detect, detectAll } from './core/detect.js';

@@ -5,14 +5,12 @@ import { CLI_PROVIDER_MAP, listModels, getKnownModels, refreshModels } from './m
 import { clearCache, CACHE_TTL_MS, ModelsFetchError } from './core/models-catalog.js';
 import type { KnownModel } from './types.js';
 
-const fixturePath = resolve(__dirname, '../test/fixtures/models-dev-sample.json');
-const fixtureJson = readFileSync(fixturePath, 'utf8');
-
+const fixtureJson = readFileSync(resolve(__dirname, '../test/fixtures/models-dev-sample.json'), 'utf8');
 const originalFetch = globalThis.fetch;
 
 function mockFetchSuccess() {
-  globalThis.fetch = vi.fn().mockResolvedValue(
-    new Response(fixtureJson, { status: 200, headers: { 'content-type': 'application/json' } }),
+  globalThis.fetch = vi.fn().mockImplementation(() =>
+    Promise.resolve(new Response(fixtureJson, { status: 200 })),
   );
 }
 
@@ -52,7 +50,6 @@ describe('listModels', () => {
     mockFetchSuccess();
     const models = await listModels();
     expect(models.length).toBe(4); // 2 anthropic + 1 openai + 1 google
-    // Verify sorted
     for (let i = 1; i < models.length; i++) {
       expect(models[i - 1].id.localeCompare(models[i].id, 'en')).toBeLessThanOrEqual(0);
     }
@@ -81,7 +78,7 @@ describe('listModels', () => {
   it('filters by provider=google', async () => {
     mockFetchSuccess();
     const models = await listModels({ provider: 'google' });
-    expect(models.every(m => m.provider === 'other')).toBe(true);
+    expect(models.every(m => m.provider === 'google')).toBe(true);
     expect(models.length).toBe(1);
   });
 
@@ -127,12 +124,10 @@ describe('listModels', () => {
   });
 
   it('returns stale cache data instead of fallback on expired cache + fetch failure', async () => {
-    // Populate cache
     mockFetchSuccess();
     const initial = await listModels();
     expect(initial.length).toBe(4);
 
-    // Expire cache and fail fetch — stale cache should be returned, not fallback
     vi.useFakeTimers();
     vi.advanceTimersByTime(CACHE_TTL_MS + 1);
     mockFetchFailure();
@@ -142,15 +137,6 @@ describe('listModels', () => {
     const models = await listModels({ fallback });
     expect(models.length).toBe(4); // stale cache, not fallback
     vi.useRealTimers();
-  });
-});
-
-describe('debug logging', () => {
-  it('imports createDebugLogger from debug module', async () => {
-    // Verify the models module uses the debug logger by checking the import exists
-    const modelsSource = readFileSync(resolve(__dirname, 'models.ts'), 'utf8');
-    expect(modelsSource).toContain("createDebugLogger");
-    expect(modelsSource).toContain("log?.(");
   });
 });
 
@@ -178,27 +164,24 @@ describe('getKnownModels', () => {
 });
 
 describe('refreshModels', () => {
-  it('calls invalidateAndFetch successfully', async () => {
+  it('calls refreshCache successfully', async () => {
     mockFetchSuccess();
     await expect(refreshModels()).resolves.toBeUndefined();
   });
 
-  it('throws when invalidateAndFetch fails', async () => {
+  it('throws when refreshCache fails', async () => {
     mockFetchFailure();
     await expect(refreshModels()).rejects.toThrow(ModelsFetchError);
   });
 
   it('after failed refresh, listModels still returns cached data', async () => {
-    // Populate cache
     mockFetchSuccess();
     const before = await listModels();
     expect(before.length).toBe(4);
 
-    // Fail refresh
     mockFetchFailure();
     await expect(refreshModels()).rejects.toThrow();
 
-    // Cache still works
     mockFetchFailure();
     const after = await listModels();
     expect(after.length).toBe(4);

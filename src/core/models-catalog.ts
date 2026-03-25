@@ -1,18 +1,12 @@
 import type { KnownModel } from '../types.js';
 import { createDebugLogger } from './debug.js';
 
-// --- Debug logger (activated via NODE_DEBUG=spawner) ---
-
 const log = createDebugLogger();
-
-// --- Constants ---
 
 export const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const MODELS_DEV_URL = 'https://models.dev/api.json';
 export const FETCH_TIMEOUT_MS = 10_000;
-const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
-
-// --- Internal types ---
+const MAX_RESPONSE_CHARS = 10 * 1024 * 1024; // 10 million characters
 
 export interface ModelsDevRawModel {
   id: string;
@@ -38,41 +32,31 @@ export interface ModelsCache {
   stale: boolean;
 }
 
-// --- Error class ---
-
 export class ModelsFetchError extends Error {
   readonly statusCode?: number;
-  override readonly cause?: Error;
 
   constructor(message: string, options?: { statusCode?: number; cause?: Error }) {
-    super(message);
+    super(message, options?.cause ? { cause: options.cause } : undefined);
     this.name = 'ModelsFetchError';
     this.statusCode = options?.statusCode;
-    this.cause = options?.cause;
   }
 }
 
-// --- Module-level state ---
+function toModelsFetchError(err: unknown, message = 'Failed to fetch models catalog'): ModelsFetchError {
+  if (err instanceof ModelsFetchError) return err;
+  return new ModelsFetchError(message, {
+    cause: err instanceof Error ? err : new Error(String(err)),
+  });
+}
 
 let cache: ModelsCache | null = null;
 let inflight: Promise<ModelsCache> | null = null;
-
-// --- Provider mapping ---
-
-const KNOWN_PROVIDERS = new Set(['anthropic', 'openai']);
-
-function mapProvider(providerId: string): 'anthropic' | 'openai' | 'other' {
-  return KNOWN_PROVIDERS.has(providerId) ? (providerId as 'anthropic' | 'openai') : 'other';
-}
-
-// --- Transform functions ---
 
 export function toKnownModel(providerId: string, raw: ModelsDevRawModel): KnownModel {
   return {
     id: raw.id,
     name: raw.name,
-    provider: mapProvider(providerId),
-
+    provider: providerId,
     contextWindow: raw.limit?.context ?? null,
     supportsEffort: raw.reasoning ?? false,
   };
@@ -90,13 +74,13 @@ export function transformCatalog(raw: ModelsDevRawResponse): Map<string, KnownMo
     for (const rawModel of Object.values(provider.models)) {
       models.push(toKnownModel(providerId, rawModel));
     }
-    result.set(providerId, models);
+    if (models.length > 0) {
+      result.set(providerId, models);
+    }
   }
 
   return result;
 }
-
-// --- Fetch ---
 
 export async function fetchCatalog(): Promise<ModelsDevRawResponse> {
   const startTime = Date.now();
@@ -122,17 +106,17 @@ export async function fetchCatalog(): Promise<ModelsDevRawResponse> {
   }
 
   const contentLength = response.headers.get('content-length');
-  if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_BYTES) {
-    throw new ModelsFetchError(`Response too large: ${contentLength} bytes exceeds ${MAX_RESPONSE_BYTES} limit`);
+  if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_CHARS) {
+    throw new ModelsFetchError(`Response too large: ${contentLength} characters exceeds ${MAX_RESPONSE_CHARS} limit`);
   }
 
   const text = await response.text();
 
-  if (text.length > MAX_RESPONSE_BYTES) {
-    throw new ModelsFetchError(`Response body too large: ${text.length} bytes exceeds ${MAX_RESPONSE_BYTES} limit`);
+  if (text.length > MAX_RESPONSE_CHARS) {
+    throw new ModelsFetchError(`Response body too large: ${text.length} characters exceeds ${MAX_RESPONSE_CHARS} limit`);
   }
 
-  log?.(`fetchCatalog: ${text.length} bytes, ${Date.now() - startTime}ms total`);
+  log?.(`fetchCatalog: ${text.length} chars, ${Date.now() - startTime}ms total`);
 
   try {
     return JSON.parse(text) as ModelsDevRawResponse;
@@ -142,8 +126,6 @@ export async function fetchCatalog(): Promise<ModelsDevRawResponse> {
     });
   }
 }
-
-// --- Cache management ---
 
 export function getCache(): ModelsCache | null {
   return cache;
@@ -183,11 +165,7 @@ export async function ensureCache(): Promise<ModelsCache> {
         cache = { ...cache, stale: true };
         return cache;
       }
-      throw err instanceof ModelsFetchError
-        ? err
-        : new ModelsFetchError('Failed to fetch models catalog', {
-            cause: err instanceof Error ? err : new Error(String(err)),
-          });
+      throw toModelsFetchError(err);
     } finally {
       inflight = null;
     }
@@ -196,17 +174,13 @@ export async function ensureCache(): Promise<ModelsCache> {
   return inflight;
 }
 
-export async function invalidateAndFetch(): Promise<ModelsCache> {
+export async function refreshCache(): Promise<ModelsCache> {
   try {
     const raw = await fetchCatalog();
     const data = transformCatalog(raw);
     cache = { data, fetchedAt: Date.now(), stale: false };
     return cache;
   } catch (err) {
-    throw err instanceof ModelsFetchError
-      ? err
-      : new ModelsFetchError('Failed to fetch models catalog', {
-          cause: err instanceof Error ? err : new Error(String(err)),
-        });
+    throw toModelsFetchError(err);
   }
 }
