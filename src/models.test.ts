@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { CLI_PROVIDER_MAP, listModels, getKnownModels } from './models.js';
+import { CLI_PROVIDER_MAP, listModels, getKnownModels, refreshModels } from './models.js';
 import { clearCache, ModelsFetchError, MODELS_DEV_URL } from './core/models-catalog.js';
 import type { KnownModel } from './types.js';
 
@@ -147,5 +147,33 @@ describe('getKnownModels', () => {
     ];
     const models = await getKnownModels('claude', fallback);
     expect(models).toBe(fallback);
+  });
+});
+
+describe('refreshModels', () => {
+  it('calls invalidateAndFetch successfully', async () => {
+    mockFetchSuccess();
+    await expect(refreshModels()).resolves.toBeUndefined();
+  });
+
+  it('throws when invalidateAndFetch fails', async () => {
+    mockFetchFailure();
+    await expect(refreshModels()).rejects.toThrow(ModelsFetchError);
+  });
+
+  it('after failed refresh, listModels still returns cached data', async () => {
+    // Populate cache
+    mockFetchSuccess();
+    const before = await listModels();
+    expect(before.length).toBe(4);
+
+    // Fail refresh
+    mockFetchFailure();
+    await expect(refreshModels()).rejects.toThrow();
+
+    // Cache still works
+    mockFetchFailure();
+    const after = await listModels();
+    expect(after.length).toBe(4);
   });
 });

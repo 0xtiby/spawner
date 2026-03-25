@@ -1,5 +1,5 @@
 import type { CliName, KnownModel, ListModelsOptions } from './types.js';
-import { ensureCache, ModelsFetchError } from './core/models-catalog.js';
+import { ensureCache, invalidateAndFetch } from './core/models-catalog.js';
 import { createDebugLogger } from './core/debug.js';
 
 // --- Debug logger ---
@@ -60,4 +60,15 @@ export async function listModels(options?: ListModelsOptions): Promise<KnownMode
 
 export async function getKnownModels(cli?: CliName, fallbackModels?: KnownModel[]): Promise<KnownModel[]> {
   return listModels({ cli, fallback: fallbackModels });
+}
+
+export async function refreshModels(): Promise<void> {
+  log?.('refreshModels: refreshing cache');
+  try {
+    await invalidateAndFetch();
+    log?.('refreshModels: cache refreshed successfully');
+  } catch (err) {
+    log?.('refreshModels: refresh failed, cache preserved');
+    throw err;
+  }
 }
