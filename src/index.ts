@@ -16,7 +16,7 @@ export type {
 } from './types.js';
 
 // --- Models registry ---
-export { getKnownModels, listModels } from './models.js';
+export { getKnownModels, listModels, refreshModels } from './models.js';
 
 export { detect, detectAll } from './core/detect.js';
 export { spawn } from './core/spawn.js';
