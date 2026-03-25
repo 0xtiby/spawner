@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CLI_PROVIDER_MAP, listModels, getKnownModels, refreshModels } from './models.js';
-import { clearCache, ModelsFetchError, MODELS_DEV_URL } from './core/models-catalog.js';
+import { clearCache, CACHE_TTL_MS, ModelsFetchError } from './core/models-catalog.js';
 import type { KnownModel } from './types.js';
 
 const fixturePath = resolve(__dirname, '../test/fixtures/models-dev-sample.json');
@@ -124,6 +124,33 @@ describe('listModels', () => {
     await listModels();
     await listModels();
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns stale cache data instead of fallback on expired cache + fetch failure', async () => {
+    // Populate cache
+    mockFetchSuccess();
+    const initial = await listModels();
+    expect(initial.length).toBe(4);
+
+    // Expire cache and fail fetch — stale cache should be returned, not fallback
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(CACHE_TTL_MS + 1);
+    mockFetchFailure();
+    const fallback: KnownModel[] = [
+      { id: 'fb', name: 'FB', provider: 'anthropic', contextWindow: null, supportsEffort: false },
+    ];
+    const models = await listModels({ fallback });
+    expect(models.length).toBe(4); // stale cache, not fallback
+    vi.useRealTimers();
+  });
+});
+
+describe('debug logging', () => {
+  it('imports createDebugLogger from debug module', async () => {
+    // Verify the models module uses the debug logger by checking the import exists
+    const modelsSource = readFileSync(resolve(__dirname, 'models.ts'), 'utf8');
+    expect(modelsSource).toContain("createDebugLogger");
+    expect(modelsSource).toContain("log?.(");
   });
 });
 
