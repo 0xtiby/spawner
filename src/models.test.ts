@@ -52,6 +52,40 @@ describe('KnownModel type', () => {
     };
     expect(model.provider).toBe('google');
   });
+
+  it('satisfies KnownModel shape without cli field', () => {
+    const model = {
+      id: 'test',
+      name: 'Test',
+      provider: 'anthropic',
+      contextWindow: null,
+      supportsEffort: false,
+    } satisfies KnownModel;
+    expect(model).not.toHaveProperty('cli');
+    expect(model.provider).toBe('anthropic');
+  });
+});
+
+describe('OpenCode namespaced ID format', () => {
+  it('produces provider/id format from model fields', () => {
+    const model: KnownModel = {
+      id: 'claude-sonnet-4-20250514',
+      name: 'Claude Sonnet 4',
+      provider: 'anthropic',
+      contextWindow: 200_000,
+      supportsEffort: true,
+    };
+    const namespacedId = `${model.provider}/${model.id}`;
+    expect(namespacedId).toBe('anthropic/claude-sonnet-4-20250514');
+  });
+
+  it('matches actual OpenCode entries in KNOWN_MODELS', () => {
+    const openCodeModels = KNOWN_MODELS.filter(m => m.id.includes('/'));
+    expect(openCodeModels.length).toBeGreaterThan(0);
+    for (const m of openCodeModels) {
+      expect(m.id).toMatch(/^[^/]+\/.+$/);
+    }
+  });
 });
 
 describe('getKnownModels', () => {
