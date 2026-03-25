@@ -1,4 +1,9 @@
 import type { KnownModel } from '../types.js';
+import { createDebugLogger } from './debug.js';
+
+// --- Debug logger (activated via NODE_DEBUG=spawner) ---
+
+const log = createDebugLogger();
 
 // --- Constants ---
 
@@ -94,9 +99,21 @@ export function transformCatalog(raw: ModelsDevRawResponse): Map<string, KnownMo
 // --- Fetch ---
 
 export async function fetchCatalog(): Promise<ModelsDevRawResponse> {
-  const response = await fetch(MODELS_DEV_URL, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
+  const startTime = Date.now();
+  log?.(`fetchCatalog: fetching ${MODELS_DEV_URL}`);
+
+  let response: Response;
+  try {
+    response = await fetch(MODELS_DEV_URL, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new ModelsFetchError('Failed to fetch models catalog', {
+      cause: err instanceof Error ? err : new Error(String(err)),
+    });
+  }
+
+  log?.(`fetchCatalog: HTTP ${response.status} (${Date.now() - startTime}ms)`);
 
   if (!response.ok) {
     throw new ModelsFetchError(`HTTP ${response.status} ${response.statusText}`, {
@@ -114,6 +131,8 @@ export async function fetchCatalog(): Promise<ModelsDevRawResponse> {
   if (text.length > MAX_RESPONSE_BYTES) {
     throw new ModelsFetchError(`Response body too large: ${text.length} bytes exceeds ${MAX_RESPONSE_BYTES} limit`);
   }
+
+  log?.(`fetchCatalog: ${text.length} bytes, ${Date.now() - startTime}ms total`);
 
   try {
     return JSON.parse(text) as ModelsDevRawResponse;
