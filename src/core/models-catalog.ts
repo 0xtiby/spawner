@@ -72,7 +72,7 @@ export function toKnownModel(providerId: string, raw: ModelsDevRawModel): KnownM
     id: raw.id,
     name: raw.name,
     provider: mapProvider(providerId),
-    cli: [],
+
     contextWindow: raw.limit?.context ?? null,
     supportsEffort: raw.reasoning ?? false,
   };

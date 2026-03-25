@@ -34,7 +34,6 @@ describe('toKnownModel', () => {
       id: 'claude-sonnet-4-20250514',
       name: 'Claude Sonnet 4',
       provider: 'anthropic',
-      cli: [],
       contextWindow: 200000,
       supportsEffort: true,
     });
@@ -73,9 +72,9 @@ describe('toKnownModel', () => {
     expect(toKnownModel('google', raw).provider).toBe('other');
   });
 
-  it('always sets cli to empty array', () => {
+  it('does not include cli field', () => {
     const raw: ModelsDevRawModel = { id: 'test', name: 'Test', reasoning: true, limit: { context: 100 } };
-    expect(toKnownModel('anthropic', raw).cli).toEqual([]);
+    expect(toKnownModel('anthropic', raw)).not.toHaveProperty('cli');
   });
 });
 

@@ -109,8 +109,7 @@ export interface ListModelsOptions {
 export interface KnownModel {
   id: string;
   name: string;
-  provider: 'anthropic' | 'openai' | 'other';
-  cli: CliName[];
+  provider: string;
   contextWindow: number | null;
   supportsEffort: boolean;
 }
