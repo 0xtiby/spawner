@@ -1,4 +1,12 @@
 import type { CliName, KnownModel, ListModelsOptions } from './types.js';
+import { ensureCache, ModelsFetchError } from './core/models-catalog.js';
+import { createDebugLogger } from './core/debug.js';
+
+// --- Debug logger ---
+
+const log = createDebugLogger();
+
+// --- Provider mapping ---
 
 export const CLI_PROVIDER_MAP: Record<CliName, string | null> = {
   claude: 'anthropic',
@@ -6,69 +14,50 @@ export const CLI_PROVIDER_MAP: Record<CliName, string | null> = {
   opencode: null,
 };
 
-export const KNOWN_MODELS: KnownModel[] = [
-  // Claude Code
-  {
-    id: 'claude-sonnet-4-20250514',
-    name: 'Claude Sonnet 4',
-    provider: 'anthropic',
-    contextWindow: 200_000,
-    supportsEffort: true,
-  },
-  {
-    id: 'claude-opus-4-20250514',
-    name: 'Claude Opus 4',
-    provider: 'anthropic',
-    contextWindow: 200_000,
-    supportsEffort: true,
-  },
-  {
-    id: 'claude-haiku-3-5-20241022',
-    name: 'Claude 3.5 Haiku',
-    provider: 'anthropic',
-    contextWindow: 200_000,
-    supportsEffort: false,
-  },
-  // Codex
-  {
-    id: 'o4-mini',
-    name: 'o4 Mini',
-    provider: 'openai',
-    contextWindow: 200_000,
-    supportsEffort: true,
-  },
-  {
-    id: 'gpt-4.1',
-    name: 'GPT-4.1',
-    provider: 'openai',
-    contextWindow: 128_000,
-    supportsEffort: false,
-  },
-  // OpenCode
-  {
-    id: 'anthropic/claude-sonnet-4-20250514',
-    name: 'Claude Sonnet 4 (OpenCode)',
-    provider: 'anthropic',
-    contextWindow: 200_000,
-    supportsEffort: false,
-  },
-  {
-    id: 'openai/gpt-4.1',
-    name: 'GPT-4.1 (OpenCode)',
-    provider: 'openai',
-    contextWindow: 128_000,
-    supportsEffort: false,
-  },
-];
+// --- Public API ---
 
-export function getKnownModels(): KnownModel[] {
-  return KNOWN_MODELS;
+export async function listModels(options?: ListModelsOptions): Promise<KnownModel[]> {
+  let cache;
+  try {
+    cache = await ensureCache();
+  } catch (err) {
+    if (options?.fallback) {
+      log?.('listModels: ensureCache failed, returning fallback');
+      return options.fallback;
+    }
+    throw err;
+  }
+
+  // Determine provider filter
+  let providerFilter: string | null = null;
+  if (options?.provider) {
+    providerFilter = options.provider;
+    log?.(`listModels: filtering by provider=${providerFilter}`);
+  } else if (options?.cli) {
+    providerFilter = CLI_PROVIDER_MAP[options.cli];
+    log?.(`listModels: filtering by cli=${options.cli} → provider=${providerFilter}`);
+  }
+
+  // Collect models from cache
+  let models: KnownModel[] = [];
+  if (providerFilter) {
+    const providerModels = cache.data.get(providerFilter);
+    if (providerModels) {
+      models = [...providerModels];
+    }
+  } else {
+    for (const providerModels of cache.data.values()) {
+      models.push(...providerModels);
+    }
+  }
+
+  // Sort alphabetically by id
+  models.sort((a, b) => a.id.localeCompare(b.id, 'en'));
+
+  log?.(`listModels: returning ${models.length} models (cache ${cache.stale ? 'stale' : 'fresh'})`);
+  return models;
 }
 
-export function listModels(options?: ListModelsOptions): KnownModel[] {
-  let models: KnownModel[] = KNOWN_MODELS;
-  if (options?.provider) {
-    models = models.filter(m => m.provider === options.provider);
-  }
-  return models;
+export async function getKnownModels(cli?: CliName, fallbackModels?: KnownModel[]): Promise<KnownModel[]> {
+  return listModels({ cli, fallback: fallbackModels });
 }
