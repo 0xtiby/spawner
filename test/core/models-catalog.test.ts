@@ -5,8 +5,12 @@ import {
   toKnownModel,
   transformCatalog,
   fetchCatalog,
+  ensureCache,
+  getCache,
+  clearCache,
   ModelsFetchError,
   MODELS_DEV_URL,
+  CACHE_TTL_MS,
   type ModelsDevRawModel,
   type ModelsDevRawResponse,
 } from '../../src/core/models-catalog.js';
@@ -194,5 +198,114 @@ describe('fetchCatalog', () => {
     const err = await fetchCatalog().catch((e) => e);
     expect(err).toBeInstanceOf(ModelsFetchError);
     expect(err.message).toContain('too large');
+  });
+});
+
+describe('ensureCache', () => {
+  const originalFetch = globalThis.fetch;
+
+  function mockFetchSuccess() {
+    globalThis.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response(fixtureJson, { status: 200 })),
+    );
+  }
+
+  function mockFetchFailure() {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+  }
+
+  beforeEach(() => {
+    clearCache();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    clearCache();
+  });
+
+  it('fetches and returns fresh data when cache is empty', async () => {
+    mockFetchSuccess();
+    const result = await ensureCache();
+    expect(result.stale).toBe(false);
+    expect(result.data).toBeInstanceOf(Map);
+    expect(result.data.size).toBe(4);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns cached data without fetching when cache is fresh', async () => {
+    mockFetchSuccess();
+    await ensureCache();
+    const fetchCount = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    const result = await ensureCache();
+    expect(result.stale).toBe(false);
+    expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(fetchCount);
+  });
+
+  it('re-fetches when cache is expired', async () => {
+    mockFetchSuccess();
+    await ensureCache();
+
+    const cached = getCache()!;
+    Object.assign(cached, { fetchedAt: Date.now() - CACHE_TTL_MS - 1 });
+
+    await ensureCache();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('deduplicates concurrent calls — only one fetch', async () => {
+    let resolvePromise: (v: Response) => void;
+    globalThis.fetch = vi.fn().mockReturnValue(
+      new Promise<Response>((resolve) => { resolvePromise = resolve; }),
+    );
+
+    const p1 = ensureCache();
+    const p2 = ensureCache();
+
+    resolvePromise!(new Response(fixtureJson, { status: 200 }));
+
+    const [r1, r2] = await Promise.all([p1, p2]);
+    expect(r1).toBe(r2);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns stale cache with stale:true when fetch fails and cache exists', async () => {
+    mockFetchSuccess();
+    await ensureCache();
+
+    const cached = getCache()!;
+    Object.assign(cached, { fetchedAt: Date.now() - CACHE_TTL_MS - 1 });
+
+    mockFetchFailure();
+    const result = await ensureCache();
+    expect(result.stale).toBe(true);
+    expect(result.data.size).toBe(4);
+  });
+
+  it('throws ModelsFetchError when no cache and fetch fails', async () => {
+    mockFetchFailure();
+    const err = await ensureCache().catch((e) => e);
+    expect(err).toBeInstanceOf(ModelsFetchError);
+  });
+
+  it('retries after inflight failure — inflight cleared', async () => {
+    mockFetchFailure();
+    await ensureCache().catch(() => {});
+
+    mockFetchSuccess();
+    const result = await ensureCache();
+    expect(result.stale).toBe(false);
+    expect(result.data.size).toBe(4);
+  });
+
+  it('clearCache then ensureCache triggers fresh fetch', async () => {
+    mockFetchSuccess();
+    await ensureCache();
+    clearCache();
+    expect(getCache()).toBeNull();
+
+    await ensureCache();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 });
