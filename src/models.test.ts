@@ -1,6 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { KNOWN_MODELS, getKnownModels, listModels } from './models.js';
+import { CLI_PROVIDER_MAP, KNOWN_MODELS, getKnownModels, listModels } from './models.js';
 import type { KnownModel } from './types.js';
+
+describe('CLI_PROVIDER_MAP', () => {
+  it('has entries for all three CliName values', () => {
+    expect(Object.keys(CLI_PROVIDER_MAP)).toEqual(['claude', 'codex', 'opencode']);
+  });
+
+  it('maps claude to anthropic', () => {
+    expect(CLI_PROVIDER_MAP.claude).toBe('anthropic');
+  });
+
+  it('maps codex to openai', () => {
+    expect(CLI_PROVIDER_MAP.codex).toBe('openai');
+  });
+
+  it('maps opencode to null', () => {
+    expect(CLI_PROVIDER_MAP.opencode).toBeNull();
+  });
+});
 
 describe('KNOWN_MODELS', () => {
   it('has 7 entries', () => {

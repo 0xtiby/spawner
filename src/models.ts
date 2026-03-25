@@ -1,4 +1,10 @@
-import type { KnownModel, ListModelsOptions } from './types.js';
+import type { CliName, KnownModel, ListModelsOptions } from './types.js';
+
+export const CLI_PROVIDER_MAP: Record<CliName, string | null> = {
+  claude: 'anthropic',
+  codex: 'openai',
+  opencode: null,
+};
 
 export const KNOWN_MODELS: KnownModel[] = [
   // Claude Code
