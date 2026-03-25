@@ -160,12 +160,16 @@ function isCacheExpired(): boolean {
 
 export async function ensureCache(): Promise<ModelsCache> {
   if (cache && !isCacheExpired()) {
+    log?.('ensureCache: cache hit');
     return cache;
   }
 
   if (inflight) {
+    log?.('ensureCache: joining inflight fetch');
     return inflight;
   }
+
+  log?.('ensureCache: cache miss, fetching');
 
   inflight = (async () => {
     try {
@@ -175,6 +179,7 @@ export async function ensureCache(): Promise<ModelsCache> {
       return cache;
     } catch (err) {
       if (cache) {
+        log?.('ensureCache: fetch failed, returning stale cache');
         cache = { ...cache, stale: true };
         return cache;
       }
