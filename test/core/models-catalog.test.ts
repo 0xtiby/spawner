@@ -8,6 +8,7 @@ import {
   ensureCache,
   getCache,
   clearCache,
+  invalidateAndFetch,
   ModelsFetchError,
   MODELS_DEV_URL,
   CACHE_TTL_MS,
@@ -307,5 +308,80 @@ describe('ensureCache', () => {
 
     await ensureCache();
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('invalidateAndFetch', () => {
+  const originalFetch = globalThis.fetch;
+
+  function mockFetchSuccess() {
+    globalThis.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response(fixtureJson, { status: 200 })),
+    );
+  }
+
+  function mockFetchFailure() {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+  }
+
+  beforeEach(() => {
+    clearCache();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    clearCache();
+  });
+
+  it('replaces cache with fresh data on success', async () => {
+    mockFetchSuccess();
+    await ensureCache();
+    const oldCache = getCache();
+
+    mockFetchSuccess();
+    const result = await invalidateAndFetch();
+    expect(result).not.toBe(oldCache);
+    expect(result.stale).toBe(false);
+    expect(result.data.size).toBe(4);
+  });
+
+  it('preserves existing cache on failure and throws', async () => {
+    mockFetchSuccess();
+    await ensureCache();
+    const cachedBefore = getCache();
+
+    mockFetchFailure();
+    const err = await invalidateAndFetch().catch((e) => e);
+    expect(err).toBeInstanceOf(ModelsFetchError);
+    expect(getCache()).toBe(cachedBefore);
+  });
+
+  it('throws when no existing cache and fetch fails', async () => {
+    mockFetchFailure();
+    const err = await invalidateAndFetch().catch((e) => e);
+    expect(err).toBeInstanceOf(ModelsFetchError);
+    expect(getCache()).toBeNull();
+  });
+});
+
+describe('ModelsFetchError', () => {
+  it('carries statusCode', () => {
+    const err = new ModelsFetchError('HTTP 500', { statusCode: 500 });
+    expect(err.statusCode).toBe(500);
+    expect(err.message).toBe('HTTP 500');
+    expect(err.name).toBe('ModelsFetchError');
+  });
+
+  it('carries cause', () => {
+    const cause = new Error('network failure');
+    const err = new ModelsFetchError('fetch failed', { cause });
+    expect(err.cause).toBe(cause);
+  });
+
+  it('has descriptive message', () => {
+    const err = new ModelsFetchError('HTTP 429 Too Many Requests', { statusCode: 429 });
+    expect(err.message).toBe('HTTP 429 Too Many Requests');
+    expect(err).toBeInstanceOf(Error);
   });
 });
