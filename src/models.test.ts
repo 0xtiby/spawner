@@ -3,10 +3,23 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CLI_PROVIDER_MAP, listModels, getKnownModels, refreshModels } from './models.js';
 import { clearCache, CACHE_TTL_MS, ModelsFetchError } from './core/models-catalog.js';
+import { clearCliModelsCache } from './core/cli-models.js';
 import type { KnownModel } from './types.js';
 
 const fixtureJson = readFileSync(resolve(__dirname, '../test/fixtures/models-dev-sample.json'), 'utf8');
 const originalFetch = globalThis.fetch;
+
+const mockEnsureCliModelsCache = vi.fn();
+const mockRefreshCliModelsCache = vi.fn();
+
+vi.mock('./core/cli-models.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./core/cli-models.js')>();
+  return {
+    ...actual,
+    ensureCliModelsCache: (...args: unknown[]) => mockEnsureCliModelsCache(...args),
+    refreshCliModelsCache: (...args: unknown[]) => mockRefreshCliModelsCache(...args),
+  };
+});
 
 function mockFetchSuccess() {
   globalThis.fetch = vi.fn().mockImplementation(() =>
@@ -18,9 +31,17 @@ function mockFetchFailure() {
   globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
 }
 
+const defaultCliModels: KnownModel[] = [
+  { id: 'anthropic/claude-sonnet-4-20250514', name: 'anthropic/claude-sonnet-4-20250514', provider: 'anthropic', contextWindow: null, supportsEffort: false },
+  { id: 'openai/gpt-4o', name: 'openai/gpt-4o', provider: 'openai', contextWindow: null, supportsEffort: false },
+  { id: 'anthropic/claude-haiku-3.5', name: 'anthropic/claude-haiku-3.5', provider: 'anthropic', contextWindow: null, supportsEffort: false },
+];
+
 beforeEach(() => {
   clearCache();
-  vi.restoreAllMocks();
+  clearCliModelsCache();
+  mockEnsureCliModelsCache.mockResolvedValue({ data: defaultCliModels, fetchedAt: Date.now() });
+  mockRefreshCliModelsCache.mockResolvedValue({ data: defaultCliModels, fetchedAt: Date.now() });
 });
 
 afterEach(() => {
@@ -28,8 +49,8 @@ afterEach(() => {
 });
 
 describe('CLI_PROVIDER_MAP', () => {
-  it('has entries for all three CliName values', () => {
-    expect(Object.keys(CLI_PROVIDER_MAP)).toEqual(['claude', 'codex', 'opencode']);
+  it('has entries for claude and codex only', () => {
+    expect(Object.keys(CLI_PROVIDER_MAP)).toEqual(['claude', 'codex']);
   });
 
   it('maps claude to anthropic', () => {
@@ -40,8 +61,8 @@ describe('CLI_PROVIDER_MAP', () => {
     expect(CLI_PROVIDER_MAP.codex).toBe('openai');
   });
 
-  it('maps opencode to null', () => {
-    expect(CLI_PROVIDER_MAP.opencode).toBeNull();
+  it('does not include opencode', () => {
+    expect('opencode' in CLI_PROVIDER_MAP).toBe(false);
   });
 });
 
@@ -69,10 +90,10 @@ describe('listModels', () => {
     expect(models.length).toBe(1);
   });
 
-  it('filters by cli=opencode → all models (no filter)', async () => {
-    mockFetchSuccess();
+  it('routes cli=opencode to CLI discovery (not models.dev)', async () => {
     const models = await listModels({ cli: 'opencode' });
-    expect(models.length).toBe(4);
+    expect(models.length).toBe(3); // from cliModelsFixture
+    expect(models.every(m => m.id.includes('/'))).toBe(true);
   });
 
   it('filters by provider=google', async () => {
