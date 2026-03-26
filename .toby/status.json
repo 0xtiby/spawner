@@ -3,50 +3,42 @@
     "01-types-and-constants": {
       "status": "done",
       "plannedAt": null,
-      "iterations": [],
-      "stopReason": "migrated"
+      "iterations": []
     },
     "02-detection": {
       "status": "done",
       "plannedAt": null,
-      "iterations": [],
-      "stopReason": "migrated"
+      "iterations": []
     },
     "03-command-building": {
       "status": "done",
       "plannedAt": null,
-      "iterations": [],
-      "stopReason": "migrated"
+      "iterations": []
     },
     "04-stream-parsing": {
       "status": "done",
       "plannedAt": null,
-      "iterations": [],
-      "stopReason": "migrated"
+      "iterations": []
     },
     "05-spawn-and-process": {
       "status": "done",
       "plannedAt": null,
-      "iterations": [],
-      "stopReason": "migrated"
+      "iterations": []
     },
     "06-error-classification": {
       "status": "done",
       "plannedAt": null,
-      "iterations": [],
-      "stopReason": "migrated"
+      "iterations": []
     },
     "07-extract": {
       "status": "done",
       "plannedAt": null,
-      "iterations": [],
-      "stopReason": "migrated"
+      "iterations": []
     },
     "08-testing-strategy": {
       "status": "done",
       "plannedAt": null,
-      "iterations": [],
-      "stopReason": "migrated"
+      "iterations": []
     },
     "09-models-catalog-fetcher": {
       "status": "done",
@@ -80,7 +72,7 @@
         },
         {
           "type": "build",
-          "iteration": 3,
+          "iteration": 1,
           "sessionId": "6a92ddd6-e5d4-4d6e-aea2-5b3f71a58c28",
           "state": "failed",
           "cli": "claude",
@@ -93,7 +85,7 @@
         },
         {
           "type": "build",
-          "iteration": 4,
+          "iteration": 2,
           "sessionId": "6a92ddd6-e5d4-4d6e-aea2-5b3f71a58c28",
           "state": "failed",
           "cli": "claude",
@@ -106,7 +98,7 @@
         },
         {
           "type": "build",
-          "iteration": 5,
+          "iteration": 3,
           "sessionId": "6a92ddd6-e5d4-4d6e-aea2-5b3f71a58c28",
           "state": "failed",
           "cli": "claude",
@@ -119,7 +111,7 @@
         },
         {
           "type": "build",
-          "iteration": 6,
+          "iteration": 4,
           "sessionId": "6a92ddd6-e5d4-4d6e-aea2-5b3f71a58c28",
           "state": "failed",
           "cli": "claude",
@@ -132,7 +124,7 @@
         },
         {
           "type": "build",
-          "iteration": 7,
+          "iteration": 5,
           "sessionId": "6a92ddd6-e5d4-4d6e-aea2-5b3f71a58c28",
           "state": "failed",
           "cli": "claude",
@@ -145,7 +137,7 @@
         },
         {
           "type": "build",
-          "iteration": 8,
+          "iteration": 6,
           "sessionId": "6a92ddd6-e5d4-4d6e-aea2-5b3f71a58c28",
           "state": "failed",
           "cli": "claude",
@@ -158,7 +150,7 @@
         },
         {
           "type": "build",
-          "iteration": 9,
+          "iteration": 7,
           "sessionId": "6a92ddd6-e5d4-4d6e-aea2-5b3f71a58c28",
           "state": "failed",
           "cli": "claude",
@@ -171,7 +163,7 @@
         },
         {
           "type": "build",
-          "iteration": 10,
+          "iteration": 8,
           "sessionId": "6a92ddd6-e5d4-4d6e-aea2-5b3f71a58c28",
           "state": "failed",
           "cli": "claude",
@@ -184,7 +176,7 @@
         },
         {
           "type": "build",
-          "iteration": 11,
+          "iteration": 9,
           "sessionId": "6a92ddd6-e5d4-4d6e-aea2-5b3f71a58c28",
           "state": "complete",
           "cli": "claude",
@@ -195,8 +187,7 @@
           "taskCompleted": null,
           "tokensUsed": 507
         }
-      ],
-      "stopReason": "sentinel"
+      ]
     },
     "10-model-types-and-mapping": {
       "status": "done",
@@ -230,7 +221,7 @@
         },
         {
           "type": "build",
-          "iteration": 3,
+          "iteration": 1,
           "sessionId": "e38e1e2f-c28f-40d5-b830-9b384b15c4e4",
           "state": "failed",
           "cli": "claude",
@@ -243,7 +234,7 @@
         },
         {
           "type": "build",
-          "iteration": 4,
+          "iteration": 2,
           "sessionId": "e38e1e2f-c28f-40d5-b830-9b384b15c4e4",
           "state": "failed",
           "cli": "claude",
@@ -256,7 +247,7 @@
         },
         {
           "type": "build",
-          "iteration": 5,
+          "iteration": 3,
           "sessionId": "e38e1e2f-c28f-40d5-b830-9b384b15c4e4",
           "state": "failed",
           "cli": "claude",
@@ -269,7 +260,7 @@
         },
         {
           "type": "build",
-          "iteration": 6,
+          "iteration": 4,
           "sessionId": "e38e1e2f-c28f-40d5-b830-9b384b15c4e4",
           "state": "failed",
           "cli": "claude",
@@ -282,7 +273,7 @@
         },
         {
           "type": "build",
-          "iteration": 7,
+          "iteration": 5,
           "sessionId": "e38e1e2f-c28f-40d5-b830-9b384b15c4e4",
           "state": "complete",
           "cli": "claude",
@@ -293,8 +284,7 @@
           "taskCompleted": null,
           "tokensUsed": 265
         }
-      ],
-      "stopReason": "sentinel"
+      ]
     },
     "11-models-public-api": {
       "status": "done",
@@ -328,7 +318,7 @@
         },
         {
           "type": "build",
-          "iteration": 3,
+          "iteration": 1,
           "sessionId": "0c1db1cf-c320-42f7-a479-1d48498d9a15",
           "state": "failed",
           "cli": "claude",
@@ -341,7 +331,7 @@
         },
         {
           "type": "build",
-          "iteration": 4,
+          "iteration": 2,
           "sessionId": "0c1db1cf-c320-42f7-a479-1d48498d9a15",
           "state": "failed",
           "cli": "claude",
@@ -354,7 +344,7 @@
         },
         {
           "type": "build",
-          "iteration": 5,
+          "iteration": 3,
           "sessionId": "0c1db1cf-c320-42f7-a479-1d48498d9a15",
           "state": "failed",
           "cli": "claude",
@@ -367,7 +357,7 @@
         },
         {
           "type": "build",
-          "iteration": 6,
+          "iteration": 4,
           "sessionId": "0c1db1cf-c320-42f7-a479-1d48498d9a15",
           "state": "failed",
           "cli": "claude",
@@ -380,7 +370,7 @@
         },
         {
           "type": "build",
-          "iteration": 7,
+          "iteration": 5,
           "sessionId": "0c1db1cf-c320-42f7-a479-1d48498d9a15",
           "state": "failed",
           "cli": "claude",
@@ -393,7 +383,7 @@
         },
         {
           "type": "build",
-          "iteration": 8,
+          "iteration": 6,
           "sessionId": "0c1db1cf-c320-42f7-a479-1d48498d9a15",
           "state": "failed",
           "cli": "claude",
@@ -406,7 +396,7 @@
         },
         {
           "type": "build",
-          "iteration": 9,
+          "iteration": 7,
           "sessionId": "0c1db1cf-c320-42f7-a479-1d48498d9a15",
           "state": "complete",
           "cli": "claude",
@@ -416,6 +406,136 @@
           "exitCode": 0,
           "taskCompleted": null,
           "tokensUsed": 1478
+        }
+      ]
+    },
+    "12-opencode-cli-model-discovery": {
+      "status": "done",
+      "plannedAt": null,
+      "iterations": [
+        {
+          "type": "plan",
+          "iteration": 1,
+          "sessionId": "ffd93692-818a-4e98-afe2-8b9319e7b797",
+          "state": "in_progress",
+          "cli": "claude",
+          "model": "claude-opus-4-6[1m]",
+          "startedAt": "2026-03-26T06:29:50.176Z",
+          "completedAt": "2026-03-26T06:33:13.041Z",
+          "exitCode": 0,
+          "taskCompleted": null,
+          "tokensUsed": 5889
+        },
+        {
+          "type": "plan",
+          "iteration": 2,
+          "sessionId": "ffd93692-818a-4e98-afe2-8b9319e7b797",
+          "state": "in_progress",
+          "cli": "claude",
+          "model": "claude-opus-4-6[1m]",
+          "startedAt": "2026-03-26T06:33:13.041Z",
+          "completedAt": "2026-03-26T06:33:51.279Z",
+          "exitCode": 0,
+          "taskCompleted": null,
+          "tokensUsed": 1573
+        },
+        {
+          "type": "build",
+          "iteration": 3,
+          "sessionId": "ffd93692-818a-4e98-afe2-8b9319e7b797",
+          "state": "failed",
+          "cli": "claude",
+          "model": "claude-opus-4-6[1m]",
+          "startedAt": "2026-03-26T06:37:29.088Z",
+          "completedAt": "2026-03-26T06:44:44.838Z",
+          "exitCode": 0,
+          "taskCompleted": null,
+          "tokensUsed": 18150
+        },
+        {
+          "type": "build",
+          "iteration": 4,
+          "sessionId": "ffd93692-818a-4e98-afe2-8b9319e7b797",
+          "state": "complete",
+          "cli": "claude",
+          "model": "claude-opus-4-6[1m]",
+          "startedAt": "2026-03-26T06:44:44.846Z",
+          "completedAt": "2026-03-26T06:45:00.250Z",
+          "exitCode": 0,
+          "taskCompleted": null,
+          "tokensUsed": 261
+        }
+      ],
+      "stopReason": "sentinel"
+    },
+    "13-opencode-models-integration": {
+      "status": "done",
+      "plannedAt": null,
+      "iterations": [
+        {
+          "type": "plan",
+          "iteration": 1,
+          "sessionId": "f2e12dca-55d7-4853-b339-3a3fc6ca9052",
+          "state": "in_progress",
+          "cli": "claude",
+          "model": "claude-opus-4-6[1m]",
+          "startedAt": "2026-03-26T06:33:51.286Z",
+          "completedAt": "2026-03-26T06:35:14.430Z",
+          "exitCode": 0,
+          "taskCompleted": null,
+          "tokensUsed": 4043
+        },
+        {
+          "type": "plan",
+          "iteration": 2,
+          "sessionId": "f2e12dca-55d7-4853-b339-3a3fc6ca9052",
+          "state": "in_progress",
+          "cli": "claude",
+          "model": "claude-opus-4-6[1m]",
+          "startedAt": "2026-03-26T06:35:14.430Z",
+          "completedAt": "2026-03-26T06:36:06.343Z",
+          "exitCode": 0,
+          "taskCompleted": null,
+          "tokensUsed": 2338
+        },
+        {
+          "type": "build",
+          "iteration": 3,
+          "sessionId": "f2e12dca-55d7-4853-b339-3a3fc6ca9052",
+          "state": "failed",
+          "cli": "claude",
+          "model": "claude-opus-4-6[1m]",
+          "startedAt": "2026-03-26T06:45:00.263Z",
+          "completedAt": "2026-03-26T06:51:07.132Z",
+          "exitCode": 0,
+          "taskCompleted": null,
+          "tokensUsed": 11822
+        },
+        {
+          "type": "build",
+          "iteration": 4,
+          "sessionId": "f2e12dca-55d7-4853-b339-3a3fc6ca9052",
+          "state": "failed",
+          "cli": "claude",
+          "model": "claude-opus-4-6[1m]",
+          "startedAt": "2026-03-26T06:51:07.139Z",
+          "completedAt": "2026-03-26T06:53:04.875Z",
+          "exitCode": 0,
+          "taskCompleted": null,
+          "tokensUsed": 2732
+        },
+        {
+          "type": "build",
+          "iteration": 5,
+          "sessionId": "f2e12dca-55d7-4853-b339-3a3fc6ca9052",
+          "state": "complete",
+          "cli": "claude",
+          "model": "claude-opus-4-6[1m]",
+          "startedAt": "2026-03-26T06:53:04.880Z",
+          "completedAt": "2026-03-26T06:55:56.114Z",
+          "exitCode": 0,
+          "taskCompleted": null,
+          "tokensUsed": 5660
         }
       ],
       "stopReason": "sentinel"
