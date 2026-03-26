@@ -1,6 +1,6 @@
 import type { CliName, KnownModel, ListModelsOptions } from './types.js';
 import { ensureCache, refreshCache } from './core/models-catalog.js';
-import { ensureCliModelsCache } from './core/cli-models.js';
+import { ensureCliModelsCache, refreshCliModelsCache } from './core/cli-models.js';
 import { createDebugLogger } from './core/debug.js';
 
 const log = createDebugLogger();
@@ -71,7 +71,15 @@ export async function getKnownModels(cli?: CliName, fallbackModels?: KnownModel[
 }
 
 export async function refreshModels(): Promise<void> {
-  log?.('refreshModels: refreshing cache');
-  await refreshCache();
-  log?.('refreshModels: cache refreshed');
+  log?.('refreshModels: refreshing both caches');
+  const results = await Promise.allSettled([
+    refreshCache(),
+    refreshCliModelsCache(),
+  ]);
+
+  const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (failures.length === results.length) {
+    throw failures[0].reason;
+  }
+  log?.('refreshModels: caches refreshed');
 }

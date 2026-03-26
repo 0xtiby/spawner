@@ -185,23 +185,30 @@ describe('getKnownModels', () => {
 });
 
 describe('refreshModels', () => {
-  it('calls refreshCache successfully', async () => {
+  it('resolves when both caches refresh successfully', async () => {
     mockFetchSuccess();
     await expect(refreshModels()).resolves.toBeUndefined();
   });
 
-  it('throws when refreshCache fails', async () => {
+  it('resolves when only models.dev refresh fails (CLI succeeds)', async () => {
     mockFetchFailure();
-    await expect(refreshModels()).rejects.toThrow(ModelsFetchError);
+    await expect(refreshModels()).resolves.toBeUndefined();
   });
 
-  it('after failed refresh, listModels still returns cached data', async () => {
+  it('throws when both refreshes fail', async () => {
+    mockFetchFailure();
+    mockRefreshCliModelsCache.mockRejectedValue(new Error('CLI failed'));
+    await expect(refreshModels()).rejects.toThrow();
+  });
+
+  it('after failed models.dev refresh, listModels still returns cached data', async () => {
     mockFetchSuccess();
     const before = await listModels();
     expect(before.length).toBe(4);
 
     mockFetchFailure();
-    await expect(refreshModels()).rejects.toThrow();
+    // refreshModels resolves because CLI refresh succeeds
+    await expect(refreshModels()).resolves.toBeUndefined();
 
     mockFetchFailure();
     const after = await listModels();
