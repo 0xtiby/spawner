@@ -38,6 +38,7 @@
     "build": "tsup",
     "lint": "tsc --noEmit",
     "test": "vitest run",
+    "e2e": "vitest run --config vitest.e2e.config.ts",
     "bootstrap": "bash scripts/bootstrap.sh",
     "setup:branch-protection": "bash scripts/setup-branch-protection.sh"
   },

@@ -1,7 +1,7 @@
 ---
 title: Spawner - Implementation Specifications
 created: 2026-03-16
-updated: 2026-03-24
+updated: 2026-03-26
 tags: [spawner, specs, typescript]
 ---
 
@@ -41,3 +41,5 @@ src/
 | [Models Catalog Fetcher](./09-models-catalog-fetcher.md) | `src/core/models-catalog.ts` | Fetch, parse, and cache models.dev catalog with 24h TTL, stale cache fallback, ModelsFetchError |
 | [Model Types & Mapping](./10-model-types-and-mapping.md) | `src/types.ts`, `src/models.ts` | Updated KnownModel interface (drop `cli`, widen `provider`), CLI→provider mapping, OpenCode ID format |
 | [Models Public API](./11-models-public-api.md) | `src/models.ts`, `src/index.ts` | Async `listModels()`, `getKnownModels()`, `refreshModels()` with `fallback` and stale cache support |
+| [OpenCode CLI Model Discovery](./12-opencode-cli-model-discovery.md) | `src/core/cli-models.ts` | Execute `opencode models` CLI, parse output into `KnownModel[]`, cache with 24h TTL |
+| [OpenCode Models Integration](./13-opencode-models-integration.md) | `src/models.ts` | Wire CLI-based discovery into `listModels`/`getKnownModels` for OpenCode, keep models.dev for others |
