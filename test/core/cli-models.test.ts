@@ -106,12 +106,12 @@ describe('parseCliModelsOutput', () => {
     expect(models).toHaveLength(2);
   });
 
-  it('uses full line as id, name, and provider when no / separator', () => {
+  it('uses "unknown" as provider when no / separator', () => {
     const models = parseCliModelsOutput('some-model-without-slash');
     expect(models[0]).toEqual({
       id: 'some-model-without-slash',
       name: 'some-model-without-slash',
-      provider: 'some-model-without-slash',
+      provider: 'unknown',
       contextWindow: null,
       supportsEffort: false,
     });
@@ -284,6 +284,28 @@ describe('cache', () => {
 
     // Cache unchanged
     expect(getCliModelsCache()).toBe(cached);
+  });
+
+  it('returns stale cache when fetch fails after TTL expiry', async () => {
+    mockQueue.push(createMockProcess({
+      stdoutLines: ['anthropic/claude-sonnet-4-20250514'],
+      exitCode: 0,
+    }));
+
+    await ensureCliModelsCache();
+    const cached = getCliModelsCache()!;
+    cached.fetchedAt = Date.now() - CLI_MODELS_CACHE_TTL_MS - 1;
+
+    mockQueue.push(createEnoentProcess());
+
+    const result = await ensureCliModelsCache();
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].id).toBe('anthropic/claude-sonnet-4-20250514');
+  });
+
+  it('throws when fetch fails with no prior cache', async () => {
+    mockQueue.push(createEnoentProcess());
+    await expect(ensureCliModelsCache()).rejects.toThrow(CliModelsFetchError);
   });
 
   it('clearCliModelsCache invalidates cache', async () => {

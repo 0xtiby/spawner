@@ -5,9 +5,10 @@ import { createDebugLogger } from './core/debug.js';
 
 const log = createDebugLogger();
 
-export const CLI_PROVIDER_MAP: Record<'claude' | 'codex', string> = {
+export const CLI_PROVIDER_MAP: Record<CliName, string | null> = {
   claude: 'anthropic',
   codex: 'openai',
+  opencode: null,
 };
 
 export async function listModels(options?: ListModelsOptions): Promise<KnownModel[]> {
@@ -44,7 +45,7 @@ export async function listModels(options?: ListModelsOptions): Promise<KnownMode
     providerFilter = options.provider;
     log?.(`listModels: filtering by provider=${providerFilter}`);
   } else if (options?.cli) {
-    providerFilter = CLI_PROVIDER_MAP[options.cli as keyof typeof CLI_PROVIDER_MAP];
+    providerFilter = CLI_PROVIDER_MAP[options.cli];
     log?.(`listModels: filtering by cli=${options.cli} → provider=${providerFilter}`);
   }
 
@@ -78,6 +79,9 @@ export async function refreshModels(): Promise<void> {
   ]);
 
   const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+  for (const f of failures) {
+    log?.(`refreshModels: partial failure: ${f.reason}`);
+  }
   if (failures.length === results.length) {
     throw failures[0].reason;
   }

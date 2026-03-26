@@ -1,5 +1,5 @@
 import { execCommand } from './detect.js';
-import type { ExecResult } from './detect.js';
+import type { ExecResult, ExecError } from './detect.js';
 import type { KnownModel } from '../types.js';
 import { createDebugLogger } from './debug.js';
 
@@ -23,8 +23,8 @@ export class CliModelsFetchError extends Error {
 
 // --- Type guard ---
 
-function isExecResult(result: Awaited<ReturnType<typeof execCommand>>): result is ExecResult {
-  return 'exitCode' in result;
+function isExecError(result: ExecResult | ExecError): result is ExecError {
+  return 'kind' in result;
 }
 
 // --- Parsing ---
@@ -36,7 +36,7 @@ export function parseCliModelsOutput(stdout: string): KnownModel[] {
     .filter(line => line.length > 0)
     .map(line => {
       const slashIndex = line.indexOf('/');
-      const provider = slashIndex > 0 ? line.substring(0, slashIndex) : line;
+      const provider = slashIndex > 0 ? line.substring(0, slashIndex) : 'unknown';
       return {
         id: line,
         name: line,
@@ -53,7 +53,7 @@ export async function fetchCliModels(): Promise<KnownModel[]> {
   log?.('fetchCliModels: executing opencode models');
   const result = await execCommand('opencode', ['models']);
 
-  if (!isExecResult(result)) {
+  if (isExecError(result)) {
     switch (result.kind) {
       case 'enoent':
         throw new CliModelsFetchError('opencode binary not found', 'enoent');
@@ -107,6 +107,12 @@ export async function ensureCliModelsCache(): Promise<CliModelsCache> {
       const data = await fetchCliModels();
       cache = { data, fetchedAt: Date.now() };
       return cache;
+    } catch (err) {
+      if (cache) {
+        log?.('ensureCliModelsCache: fetch failed, returning stale cache');
+        return cache;
+      }
+      throw err;
     } finally {
       inflight = null;
     }

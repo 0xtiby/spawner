@@ -51,8 +51,8 @@ afterEach(() => {
 });
 
 describe('CLI_PROVIDER_MAP', () => {
-  it('has entries for claude and codex only', () => {
-    expect(Object.keys(CLI_PROVIDER_MAP)).toEqual(['claude', 'codex']);
+  it('has entries for all three CliName values', () => {
+    expect(Object.keys(CLI_PROVIDER_MAP)).toEqual(['claude', 'codex', 'opencode']);
   });
 
   it('maps claude to anthropic', () => {
@@ -63,8 +63,8 @@ describe('CLI_PROVIDER_MAP', () => {
     expect(CLI_PROVIDER_MAP.codex).toBe('openai');
   });
 
-  it('does not include opencode', () => {
-    expect('opencode' in CLI_PROVIDER_MAP).toBe(false);
+  it('maps opencode to null', () => {
+    expect(CLI_PROVIDER_MAP.opencode).toBeNull();
   });
 });
 
