@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CLI_PROVIDER_MAP, listModels, getKnownModels, refreshModels } from './models.js';
 import { clearCache, CACHE_TTL_MS, ModelsFetchError } from './core/models-catalog.js';
-import { clearCliModelsCache } from './core/cli-models.js';
+import { clearCliModelsCache, CliModelsFetchError } from './core/cli-models.js';
 import type { KnownModel } from './types.js';
 
 const fixtureJson = readFileSync(resolve(__dirname, '../test/fixtures/models-dev-sample.json'), 'utf8');
@@ -40,6 +40,8 @@ const defaultCliModels: KnownModel[] = [
 beforeEach(() => {
   clearCache();
   clearCliModelsCache();
+  mockEnsureCliModelsCache.mockReset();
+  mockRefreshCliModelsCache.mockReset();
   mockEnsureCliModelsCache.mockResolvedValue({ data: defaultCliModels, fetchedAt: Date.now() });
   mockRefreshCliModelsCache.mockResolvedValue({ data: defaultCliModels, fetchedAt: Date.now() });
 });
@@ -92,8 +94,42 @@ describe('listModels', () => {
 
   it('routes cli=opencode to CLI discovery (not models.dev)', async () => {
     const models = await listModels({ cli: 'opencode' });
-    expect(models.length).toBe(3); // from cliModelsFixture
+    expect(models.length).toBe(3); // from defaultCliModels
     expect(models.every(m => m.id.includes('/'))).toBe(true);
+  });
+
+  it('filters cli=opencode by provider', async () => {
+    const models = await listModels({ cli: 'opencode', provider: 'anthropic' });
+    expect(models.every(m => m.provider === 'anthropic')).toBe(true);
+    expect(models.length).toBe(2);
+  });
+
+  it('returns empty array for cli=opencode with nonexistent provider', async () => {
+    const models = await listModels({ cli: 'opencode', provider: 'nonexistent' });
+    expect(models).toHaveLength(0);
+  });
+
+  it('ignores fallback for cli=opencode and propagates error', async () => {
+    mockEnsureCliModelsCache.mockRejectedValue(new CliModelsFetchError('opencode not found', 'enoent'));
+    const fallback: KnownModel[] = [
+      { id: 'fb', name: 'FB', provider: 'anthropic', contextWindow: null, supportsEffort: false },
+    ];
+    await expect(listModels({ cli: 'opencode', fallback })).rejects.toThrow(CliModelsFetchError);
+  });
+
+  it('sorts cli=opencode results alphabetically by id', async () => {
+    const models = await listModels({ cli: 'opencode' });
+    const ids = models.map(m => m.id);
+    const sorted = [...ids].sort((a, b) => a.localeCompare(b, 'en'));
+    expect(ids).toEqual(sorted);
+  });
+
+  it('provider=anthropic without cli uses models.dev (no CLI involvement)', async () => {
+    mockFetchSuccess();
+    const models = await listModels({ provider: 'anthropic' });
+    expect(models.every(m => m.provider === 'anthropic')).toBe(true);
+    expect(models.length).toBe(2);
+    expect(mockEnsureCliModelsCache).not.toHaveBeenCalled();
   });
 
   it('filters by provider=google', async () => {
@@ -182,6 +218,12 @@ describe('getKnownModels', () => {
     const models = await getKnownModels('claude', fallback);
     expect(models).toBe(fallback);
   });
+
+  it('delegates opencode to CLI path', async () => {
+    const models = await getKnownModels('opencode');
+    expect(models.length).toBe(3);
+    expect(mockEnsureCliModelsCache).toHaveBeenCalled();
+  });
 });
 
 describe('refreshModels', () => {
@@ -192,6 +234,12 @@ describe('refreshModels', () => {
 
   it('resolves when only models.dev refresh fails (CLI succeeds)', async () => {
     mockFetchFailure();
+    await expect(refreshModels()).resolves.toBeUndefined();
+  });
+
+  it('resolves when only CLI refresh fails (models.dev succeeds)', async () => {
+    mockFetchSuccess();
+    mockRefreshCliModelsCache.mockRejectedValue(new Error('CLI failed'));
     await expect(refreshModels()).resolves.toBeUndefined();
   });
 
