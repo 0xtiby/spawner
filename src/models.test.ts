@@ -3,10 +3,23 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CLI_PROVIDER_MAP, listModels, getKnownModels, refreshModels } from './models.js';
 import { clearCache, CACHE_TTL_MS, ModelsFetchError } from './core/models-catalog.js';
+import { clearCliModelsCache, CliModelsFetchError } from './core/cli-models.js';
 import type { KnownModel } from './types.js';
 
 const fixtureJson = readFileSync(resolve(__dirname, '../test/fixtures/models-dev-sample.json'), 'utf8');
 const originalFetch = globalThis.fetch;
+
+const mockEnsureCliModelsCache = vi.fn();
+const mockRefreshCliModelsCache = vi.fn();
+
+vi.mock('./core/cli-models.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./core/cli-models.js')>();
+  return {
+    ...actual,
+    ensureCliModelsCache: (...args: unknown[]) => mockEnsureCliModelsCache(...args),
+    refreshCliModelsCache: (...args: unknown[]) => mockRefreshCliModelsCache(...args),
+  };
+});
 
 function mockFetchSuccess() {
   globalThis.fetch = vi.fn().mockImplementation(() =>
@@ -18,9 +31,19 @@ function mockFetchFailure() {
   globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
 }
 
+const defaultCliModels: KnownModel[] = [
+  { id: 'anthropic/claude-sonnet-4-20250514', name: 'anthropic/claude-sonnet-4-20250514', provider: 'anthropic', contextWindow: null, supportsEffort: false },
+  { id: 'openai/gpt-4o', name: 'openai/gpt-4o', provider: 'openai', contextWindow: null, supportsEffort: false },
+  { id: 'anthropic/claude-haiku-3.5', name: 'anthropic/claude-haiku-3.5', provider: 'anthropic', contextWindow: null, supportsEffort: false },
+];
+
 beforeEach(() => {
   clearCache();
-  vi.restoreAllMocks();
+  clearCliModelsCache();
+  mockEnsureCliModelsCache.mockReset();
+  mockRefreshCliModelsCache.mockReset();
+  mockEnsureCliModelsCache.mockResolvedValue({ data: defaultCliModels, fetchedAt: Date.now() });
+  mockRefreshCliModelsCache.mockResolvedValue({ data: defaultCliModels, fetchedAt: Date.now() });
 });
 
 afterEach(() => {
@@ -69,10 +92,44 @@ describe('listModels', () => {
     expect(models.length).toBe(1);
   });
 
-  it('filters by cli=opencode → all models (no filter)', async () => {
-    mockFetchSuccess();
+  it('routes cli=opencode to CLI discovery (not models.dev)', async () => {
     const models = await listModels({ cli: 'opencode' });
-    expect(models.length).toBe(4);
+    expect(models.length).toBe(3); // from defaultCliModels
+    expect(models.every(m => m.id.includes('/'))).toBe(true);
+  });
+
+  it('filters cli=opencode by provider', async () => {
+    const models = await listModels({ cli: 'opencode', provider: 'anthropic' });
+    expect(models.every(m => m.provider === 'anthropic')).toBe(true);
+    expect(models.length).toBe(2);
+  });
+
+  it('returns empty array for cli=opencode with nonexistent provider', async () => {
+    const models = await listModels({ cli: 'opencode', provider: 'nonexistent' });
+    expect(models).toHaveLength(0);
+  });
+
+  it('ignores fallback for cli=opencode and propagates error', async () => {
+    mockEnsureCliModelsCache.mockRejectedValue(new CliModelsFetchError('opencode not found', 'enoent'));
+    const fallback: KnownModel[] = [
+      { id: 'fb', name: 'FB', provider: 'anthropic', contextWindow: null, supportsEffort: false },
+    ];
+    await expect(listModels({ cli: 'opencode', fallback })).rejects.toThrow(CliModelsFetchError);
+  });
+
+  it('sorts cli=opencode results alphabetically by id', async () => {
+    const models = await listModels({ cli: 'opencode' });
+    const ids = models.map(m => m.id);
+    const sorted = [...ids].sort((a, b) => a.localeCompare(b, 'en'));
+    expect(ids).toEqual(sorted);
+  });
+
+  it('provider=anthropic without cli uses models.dev (no CLI involvement)', async () => {
+    mockFetchSuccess();
+    const models = await listModels({ provider: 'anthropic' });
+    expect(models.every(m => m.provider === 'anthropic')).toBe(true);
+    expect(models.length).toBe(2);
+    expect(mockEnsureCliModelsCache).not.toHaveBeenCalled();
   });
 
   it('filters by provider=google', async () => {
@@ -161,26 +218,45 @@ describe('getKnownModels', () => {
     const models = await getKnownModels('claude', fallback);
     expect(models).toBe(fallback);
   });
+
+  it('delegates opencode to CLI path', async () => {
+    const models = await getKnownModels('opencode');
+    expect(models.length).toBe(3);
+    expect(mockEnsureCliModelsCache).toHaveBeenCalled();
+  });
 });
 
 describe('refreshModels', () => {
-  it('calls refreshCache successfully', async () => {
+  it('resolves when both caches refresh successfully', async () => {
     mockFetchSuccess();
     await expect(refreshModels()).resolves.toBeUndefined();
   });
 
-  it('throws when refreshCache fails', async () => {
+  it('resolves when only models.dev refresh fails (CLI succeeds)', async () => {
     mockFetchFailure();
-    await expect(refreshModels()).rejects.toThrow(ModelsFetchError);
+    await expect(refreshModels()).resolves.toBeUndefined();
   });
 
-  it('after failed refresh, listModels still returns cached data', async () => {
+  it('resolves when only CLI refresh fails (models.dev succeeds)', async () => {
+    mockFetchSuccess();
+    mockRefreshCliModelsCache.mockRejectedValue(new Error('CLI failed'));
+    await expect(refreshModels()).resolves.toBeUndefined();
+  });
+
+  it('throws when both refreshes fail', async () => {
+    mockFetchFailure();
+    mockRefreshCliModelsCache.mockRejectedValue(new Error('CLI failed'));
+    await expect(refreshModels()).rejects.toThrow();
+  });
+
+  it('after failed models.dev refresh, listModels still returns cached data', async () => {
     mockFetchSuccess();
     const before = await listModels();
     expect(before.length).toBe(4);
 
     mockFetchFailure();
-    await expect(refreshModels()).rejects.toThrow();
+    // refreshModels resolves because CLI refresh succeeds
+    await expect(refreshModels()).resolves.toBeUndefined();
 
     mockFetchFailure();
     const after = await listModels();
