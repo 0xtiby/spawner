@@ -2,13 +2,14 @@
 
 > A unified TypeScript interface to spawn and interact with AI coding CLIs.
 
-Spawner lets you programmatically drive **Claude Code**, **Codex CLI**, and **OpenCode** through a single API. It handles process spawning, JSONL stream parsing, structured event emission, session management, error classification, and CLI detection -- so you can focus on building tools on top of these CLIs instead of wrestling with their individual quirks.
+[![npm version](https://img.shields.io/npm/v/@0xtiby/spawner)](https://www.npmjs.com/package/@0xtiby/spawner)
+[![license](https://img.shields.io/npm/l/@0xtiby/spawner)](./LICENSE)
+
+## What It Does
+
+Spawner gives you a single async iterable API to drive **Claude Code**, **Codex CLI**, and **OpenCode** programmatically. You pass `SpawnOptions`, iterate over typed `CliEvent` objects, and get back a structured `CliResult` -- regardless of which CLI you choose. It handles process spawning, JSONL stream parsing, session management, error classification, and CLI detection so you can build orchestrators, CI pipelines, and editor integrations without writing per-CLI adapters.
 
 **ESM only. Zero runtime dependencies. TypeScript-first.**
-
-## Why This Exists
-
-Each AI coding CLI has its own binary, arguments, output format, and error behavior. If you want to build tooling that works across all of them -- orchestrators, CI pipelines, editor integrations -- you need to write adapters for each one. Spawner does that once, correctly, and gives you a clean async iterable of typed events in return.
 
 ## Quick Start
 
@@ -19,22 +20,19 @@ pnpm add @0xtiby/spawner
 ```typescript
 import { spawn } from '@0xtiby/spawner';
 
-const process = spawn({
+const proc = spawn({
   cli: 'claude',
   prompt: 'Refactor the utils module to use named exports',
   cwd: '/path/to/project',
 });
 
-for await (const event of process.events) {
+for await (const event of proc.events) {
   switch (event.type) {
     case 'text':
       console.log(event.content);
       break;
     case 'tool_use':
       console.log(`Using tool: ${event.tool?.name}`);
-      break;
-    case 'tool_result':
-      console.log(`Tool result: ${event.toolResult?.name}`);
       break;
     case 'error':
       console.error(event.content);
@@ -45,9 +43,6 @@ for await (const event of process.events) {
       break;
   }
 }
-
-const result = await process.done;
-console.log(`Exited with code ${result.exitCode} in ${result.durationMs}ms`);
 ```
 
 ## Installation
@@ -68,9 +63,44 @@ npm install @0xtiby/spawner
 yarn add @0xtiby/spawner
 ```
 
+## Core Concepts
+
+### Streaming Events
+
+`spawn()` returns a `CliProcess` whose `events` property is an `AsyncIterable<CliEvent>`. Each event carries a `type` field that tells you what happened. Iterate with `for await...of` to process events as they stream in.
+
+| Type | When It Fires | Key Fields |
+|---|---|---|
+| `text` | The CLI emits a chunk of assistant text | `content` |
+| `tool_use` | The CLI invokes a tool | `tool.name`, `tool.input` |
+| `tool_result` | A tool call completes | `toolResult.name`, `toolResult.output`, `toolResult.error` |
+| `error` | The CLI reports an inline error | `content` |
+| `system` | Internal lifecycle signals (session start, step boundaries) | `content` |
+| `done` | The process exits | `result` (contains `CliResult`) |
+
+Every event also includes `timestamp` (Unix ms) and `raw` (the original JSONL line).
+
+### Session Management
+
+Use these `SpawnOptions` fields to control session behavior:
+
+| Goal | Options to Set |
+|---|---|
+| Start a new session | *(none -- this is the default)* |
+| Resume a session by ID | `sessionId: '<id>'` |
+| Resume the most recent session | `continueSession: true` |
+| Fork from a specific session | `sessionId: '<id>'`, `forkSession: true` |
+| Fork from the most recent session | `continueSession: true`, `forkSession: true` |
+
+`forkSession` is additive -- it only takes effect when you also set `sessionId` or `continueSession`. A fork creates a new session branched from the specified point, leaving the original session unchanged.
+
+### Error Classification
+
+When a CLI process exits with a non-zero code, spawner runs the output through `classifyError()` and attaches a structured `CliError` to the result. Each error has a `code`, a human-readable `message`, a `retryable` flag, and an optional `retryAfterMs` hint. You can use the `retryable` flag to build automatic retry logic. See the [Error Codes](#error-codes) section for the full list.
+
 ## Usage
 
-### Spawning a CLI Process
+### Spawn a Process
 
 `spawn()` is the main entry point. It returns a `CliProcess` with an async iterable of events and a promise that resolves when the process exits.
 
@@ -96,20 +126,40 @@ for await (const event of proc.events) {
 const result = await proc.done;
 ```
 
-### Resuming a Session
+### Resume or Fork a Session
 
-Pass `sessionId` to continue a previous conversation:
+Pass `sessionId` to continue a previous conversation, or combine it with `forkSession` to branch off:
 
 ```typescript
+// Resume an existing session
 const proc = spawn({
   cli: 'claude',
   prompt: 'Now add tests for the changes you just made',
   cwd: '/path/to/repo',
   sessionId: previousResult.sessionId!,
 });
+
+// Fork from an existing session (creates a new branch)
+const forked = spawn({
+  cli: 'claude',
+  prompt: 'Try a different approach to the refactor',
+  cwd: '/path/to/repo',
+  sessionId: previousResult.sessionId!,
+  forkSession: true,
+});
+
+// Resume the most recent session (no ID needed)
+const continued = spawn({
+  cli: 'claude',
+  prompt: 'What was I working on?',
+  cwd: '/path/to/repo',
+  continueSession: true,
+});
 ```
 
-### Cancellation with AbortSignal
+### Cancel or Interrupt
+
+Use `AbortSignal` for external cancellation, or call `interrupt()` for a graceful shutdown:
 
 ```typescript
 const controller = new AbortController();
@@ -124,18 +174,11 @@ const proc = spawn({
 // Cancel after 30 seconds
 setTimeout(() => controller.abort(), 30_000);
 
-const result = await proc.done;
-```
-
-### Graceful Interruption
-
-`interrupt()` sends SIGTERM, waits for a grace period, then escalates to SIGKILL:
-
-```typescript
+// Or interrupt gracefully (SIGTERM, then SIGKILL after grace period)
 const result = await proc.interrupt(5000); // 5s grace period (default)
 ```
 
-### Detecting Installed CLIs
+### Detect Installed CLIs
 
 ```typescript
 import { detect, detectAll } from '@0xtiby/spawner';
@@ -149,7 +192,7 @@ const all = await detectAll();
 // { claude: DetectResult, codex: DetectResult, opencode: DetectResult }
 ```
 
-### Extracting Results from Raw Output
+### Extract Results from Raw Output
 
 If you have captured JSONL output from a previous CLI run, parse it without spawning a process:
 
@@ -165,24 +208,7 @@ console.log(result.sessionId);
 console.log(result.usage);
 ```
 
-### Error Classification
-
-Classify raw stderr/stdout into structured error codes:
-
-```typescript
-import { classifyError } from '@0xtiby/spawner';
-
-const error = classifyError('claude', 1, 'Rate limit exceeded. Try again in 30 seconds.', '');
-// {
-//   code: 'rate_limit',
-//   message: 'Rate limit exceeded. Try again in 30 seconds.',
-//   retryable: true,
-//   retryAfterMs: 30000,
-//   raw: '...'
-// }
-```
-
-### Querying the Model Registry
+### Query the Model Registry
 
 ```typescript
 import { KNOWN_MODELS, getKnownModels, listModels } from '@0xtiby/spawner';
@@ -196,6 +222,25 @@ const claudeModels = getKnownModels('claude');
 // Filter by CLI and provider
 const openaiModels = listModels({ provider: 'openai' });
 ```
+
+## CLI Feature Parity
+
+Not every CLI supports every `SpawnOptions` field. This table shows what each adapter passes through and what it silently ignores.
+
+| Feature | Claude | Codex | OpenCode |
+|---|---|---|---|
+| `model` | Yes | Yes | Yes |
+| `sessionId` | Yes | Yes | Yes |
+| `continueSession` | Yes | Yes | Yes |
+| `forkSession` | Yes | Yes | Yes |
+| `autoApprove` | Yes | Yes | -- |
+| `effort` | Yes | Yes | -- |
+| `addDirs` | Yes | Yes | -- |
+| `ephemeral` | Yes | Yes | -- |
+| `allowInteractiveTools` | Yes | -- | -- |
+| `extraArgs` | Yes | Yes | Yes |
+
+**Legend:** "Yes" = passed to the CLI. "--" = silently ignored.
 
 ## API Reference
 
@@ -219,6 +264,7 @@ Spawns a CLI process and returns a handle for streaming events and awaiting the 
 | `addDirs` | `string[]` | -- | Additional directories to include |
 | `ephemeral` | `boolean` | -- | Run without persisting session |
 | `verbose` | `boolean` | -- | Enable debug logging to stderr |
+| `allowInteractiveTools` | `boolean` | -- | Allow tools that prompt the user for input (Claude only) |
 | `abortSignal` | `AbortSignal` | -- | Signal to abort the process |
 | `extraArgs` | `string[]` | -- | Additional CLI arguments passed through |
 
@@ -303,7 +349,7 @@ Returns known models, optionally filtered by CLI.
 
 Returns known models filtered by CLI and/or provider.
 
-## Error Handling
+## Error Codes
 
 Spawner classifies CLI errors into typed error codes so you can handle them programmatically:
 
@@ -344,7 +390,7 @@ async function spawnWithRetry(options: Parameters<typeof spawn>[0], maxRetries =
 
 ## Known Models
 
-> **Note:** This list may not reflect the latest models available in each CLI. Refer to the official documentation of each provider for the most up-to-date model list.
+> **Note:** `KNOWN_MODELS` is a static snapshot bundled with the package. It may not reflect the latest models available in each CLI. Use `listModels()` for programmatic access with filtering, and refer to each provider's official documentation for the most current model list.
 
 | Model | Provider | CLI | Context Window | Effort Support |
 |---|---|---|---|---|
@@ -399,13 +445,13 @@ pnpm tsx examples/chat.ts
 ```
 
 Features:
-- **CLI selection** — detects installed CLIs, shows versions and auth status, prompts you to pick one
-- **Streaming responses** — text streams to stdout in real-time with colored labels
-- **Tool-use indicators** — shows which tools the CLI invokes during a response
-- **Session continuity** — captures `sessionId` so follow-up messages continue the conversation
-- **Ctrl+C interrupt** — interrupts a streaming response without killing the app
-- **Slash commands** — `/exit` to quit, `/new` to start a fresh session with a different CLI
-- **Error handling** — rate limits, auth failures, and CLI crashes are caught and displayed cleanly
+- **CLI selection** -- detects installed CLIs, shows versions and auth status, prompts you to pick one
+- **Streaming responses** -- text streams to stdout in real-time with colored labels
+- **Tool-use indicators** -- shows which tools the CLI invokes during a response
+- **Session continuity** -- captures `sessionId` so follow-up messages continue the conversation
+- **Ctrl+C interrupt** -- interrupts a streaming response without killing the app
+- **Slash commands** -- `/exit` to quit, `/new` to start a fresh session with a different CLI
+- **Error handling** -- rate limits, auth failures, and CLI crashes are caught and displayed cleanly
 
 ## Development
 
