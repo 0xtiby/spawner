@@ -1,79 +1,89 @@
 import type { CliName, KnownModel, ListModelsOptions } from './types.js';
+import { ensureCache, refreshCache } from './core/models-catalog.js';
+import { ensureCliModelsCache, refreshCliModelsCache } from './core/cli-models.js';
+import { createDebugLogger } from './core/debug.js';
 
-export const KNOWN_MODELS: KnownModel[] = [
-  // Claude Code
-  {
-    id: 'claude-sonnet-4-20250514',
-    name: 'Claude Sonnet 4',
-    provider: 'anthropic',
-    cli: ['claude'],
-    contextWindow: 200_000,
-    supportsEffort: true,
-  },
-  {
-    id: 'claude-opus-4-20250514',
-    name: 'Claude Opus 4',
-    provider: 'anthropic',
-    cli: ['claude'],
-    contextWindow: 200_000,
-    supportsEffort: true,
-  },
-  {
-    id: 'claude-haiku-3-5-20241022',
-    name: 'Claude 3.5 Haiku',
-    provider: 'anthropic',
-    cli: ['claude'],
-    contextWindow: 200_000,
-    supportsEffort: false,
-  },
-  // Codex
-  {
-    id: 'o4-mini',
-    name: 'o4 Mini',
-    provider: 'openai',
-    cli: ['codex'],
-    contextWindow: 200_000,
-    supportsEffort: true,
-  },
-  {
-    id: 'gpt-4.1',
-    name: 'GPT-4.1',
-    provider: 'openai',
-    cli: ['codex'],
-    contextWindow: 128_000,
-    supportsEffort: false,
-  },
-  // OpenCode
-  {
-    id: 'anthropic/claude-sonnet-4-20250514',
-    name: 'Claude Sonnet 4 (OpenCode)',
-    provider: 'anthropic',
-    cli: ['opencode'],
-    contextWindow: 200_000,
-    supportsEffort: false,
-  },
-  {
-    id: 'openai/gpt-4.1',
-    name: 'GPT-4.1 (OpenCode)',
-    provider: 'openai',
-    cli: ['opencode'],
-    contextWindow: 128_000,
-    supportsEffort: false,
-  },
-];
+const log = createDebugLogger();
 
-export function getKnownModels(cli?: CliName): KnownModel[] {
-  if (!cli) return KNOWN_MODELS;
-  return KNOWN_MODELS.filter(m => m.cli.includes(cli));
+export const CLI_PROVIDER_MAP: Record<CliName, string | null> = {
+  claude: 'anthropic',
+  codex: 'openai',
+  opencode: null,
+};
+
+export async function listModels(options?: ListModelsOptions): Promise<KnownModel[]> {
+  // OpenCode: use CLI-based model discovery
+  if (options?.cli === 'opencode') {
+    log?.('listModels: using CLI discovery for opencode');
+    const cliCache = await ensureCliModelsCache();
+    let models = [...cliCache.data];
+
+    if (options.provider) {
+      log?.(`listModels: filtering CLI models by provider=${options.provider}`);
+      models = models.filter(m => m.provider === options.provider);
+    }
+
+    models.sort((a, b) => a.id.localeCompare(b.id, 'en'));
+    log?.(`listModels: returning ${models.length} CLI models`);
+    return models;
+  }
+
+  // Claude, Codex, or no CLI: use models.dev
+  let cache;
+  try {
+    cache = await ensureCache();
+  } catch (err) {
+    if (options?.fallback) {
+      log?.('listModels: ensureCache failed, returning fallback');
+      return options.fallback;
+    }
+    throw err;
+  }
+
+  let providerFilter: string | null = null;
+  if (options?.provider) {
+    providerFilter = options.provider;
+    log?.(`listModels: filtering by provider=${providerFilter}`);
+  } else if (options?.cli) {
+    providerFilter = CLI_PROVIDER_MAP[options.cli];
+    log?.(`listModels: filtering by cli=${options.cli} → provider=${providerFilter}`);
+  }
+
+  let models: KnownModel[] = [];
+  if (providerFilter) {
+    const providerModels = cache.data.get(providerFilter);
+    if (providerModels) {
+      models = [...providerModels];
+    }
+  } else {
+    for (const providerModels of cache.data.values()) {
+      models.push(...providerModels);
+    }
+  }
+
+  models.sort((a, b) => a.id.localeCompare(b.id, 'en'));
+
+  log?.(`listModels: returning ${models.length} models (cache ${cache.stale ? 'stale' : 'fresh'})`);
+  return models;
 }
 
-export function listModels(options?: ListModelsOptions): KnownModel[] {
-  let models: KnownModel[] = KNOWN_MODELS;
-  if (options?.cli) {
-    models = models.filter(m => m.cli.includes(options.cli!));
+export async function getKnownModels(cli?: CliName, fallbackModels?: KnownModel[]): Promise<KnownModel[]> {
+  return listModels({ cli, fallback: fallbackModels });
+}
+
+export async function refreshModels(): Promise<void> {
+  log?.('refreshModels: refreshing both caches');
+  const results = await Promise.allSettled([
+    refreshCache(),
+    refreshCliModelsCache(),
+  ]);
+
+  const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+  for (const f of failures) {
+    log?.(`refreshModels: partial failure: ${f.reason}`);
   }
-  if (options?.provider) {
-    models = models.filter(m => m.provider === options.provider);
+  if (failures.length === results.length) {
+    throw failures[0].reason;
   }
-  return models;
+  log?.('refreshModels: caches refreshed');
 }

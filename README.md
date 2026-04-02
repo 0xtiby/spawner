@@ -210,17 +210,28 @@ console.log(result.usage);
 
 ### Query the Model Registry
 
-```typescript
-import { KNOWN_MODELS, getKnownModels, listModels } from '@0xtiby/spawner';
+Models are fetched dynamically from [models.dev](https://models.dev) and cached for 24 hours.
 
-// All known models
-console.log(KNOWN_MODELS);
+```typescript
+import { listModels, getKnownModels, refreshModels } from '@0xtiby/spawner';
+
+// All models from all providers
+const all = await listModels();
 
 // Models for a specific CLI
-const claudeModels = getKnownModels('claude');
+const claudeModels = await getKnownModels('claude');
 
-// Filter by CLI and provider
-const openaiModels = listModels({ provider: 'openai' });
+// Filter by provider
+const openaiModels = await listModels({ provider: 'openai' });
+
+// With offline fallback
+const models = await listModels({
+  cli: 'claude',
+  fallback: [{ id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'anthropic', contextWindow: 200_000, supportsEffort: true }],
+});
+
+// Force-refresh the cache
+await refreshModels();
 ```
 
 ## CLI Feature Parity
@@ -337,17 +348,17 @@ Low-level pattern matching against the shared error pattern table. Returns `{ co
 
 Extracts a retry-after duration (in ms) from error text. Returns `60000` as a default fallback.
 
-### `KNOWN_MODELS: KnownModel[]`
+### `listModels(options?: ListModelsOptions): Promise<KnownModel[]>`
 
-Static registry of known models across all supported CLIs.
+Returns models fetched from models.dev, filtered by CLI and/or provider. Results are sorted alphabetically by `id`. When both `cli` and `provider` are set, `provider` takes precedence.
 
-### `getKnownModels(cli?: CliName): KnownModel[]`
+### `getKnownModels(cli?: CliName, fallback?: KnownModel[]): Promise<KnownModel[]>`
 
-Returns known models, optionally filtered by CLI.
+Convenience wrapper over `listModels()`. Returns models optionally filtered by CLI, with optional fallback on fetch failure.
 
-### `listModels(options?: ListModelsOptions): KnownModel[]`
+### `refreshModels(): Promise<void>`
 
-Returns known models filtered by CLI and/or provider.
+Force-refreshes the in-memory model cache from models.dev. On failure, the existing cache is preserved.
 
 ## Error Codes
 
@@ -388,19 +399,9 @@ async function spawnWithRetry(options: Parameters<typeof spawn>[0], maxRetries =
 }
 ```
 
-## Known Models
+## Models
 
-> **Note:** `KNOWN_MODELS` is a static snapshot bundled with the package. It may not reflect the latest models available in each CLI. Use `listModels()` for programmatic access with filtering, and refer to each provider's official documentation for the most current model list.
-
-| Model | Provider | CLI | Context Window | Effort Support |
-|---|---|---|---|---|
-| Claude Sonnet 4 | Anthropic | claude | 200k | Yes |
-| Claude Opus 4 | Anthropic | claude | 200k | Yes |
-| Claude 3.5 Haiku | Anthropic | claude | 200k | No |
-| o4 Mini | OpenAI | codex | 200k | Yes |
-| GPT-4.1 | OpenAI | codex | 128k | No |
-| Claude Sonnet 4 (OpenCode) | Anthropic | opencode | 200k | No |
-| GPT-4.1 (OpenCode) | OpenAI | opencode | 128k | No |
+Models are fetched dynamically from [models.dev](https://models.dev) and cached in memory for 24 hours. There is no static model list -- call `listModels()` or `getKnownModels()` to get the current catalog. Use `refreshModels()` to force a cache refresh.
 
 ## Architecture
 

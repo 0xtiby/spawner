@@ -3,4 +3,11 @@ dist/
 *.tsbuildinfo
 .DS_Store
 .npmrc
-.worktree 
+.worktree
+.worktrees/
+
+# Beads / Dolt files (added by bd init)
+.beads/
+.dolt/
+*.db
+.beads-credential-key
