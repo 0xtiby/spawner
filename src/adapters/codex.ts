@@ -53,7 +53,7 @@ export const codexAdapter: CliAdapter = {
     }
 
     if (options.autoApprove) {
-      args.push('--full-auto');
+      args.push('--dangerously-bypass-approvals-and-sandbox');
     }
 
     if (options.addDirs) {

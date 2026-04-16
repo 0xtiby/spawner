@@ -269,7 +269,7 @@ Spawns a CLI process and returns a handle for streaming events and awaiting the 
 | `model` | `string` | CLI default | Model identifier to use |
 | `sessionId` | `string` | -- | Resume an existing session |
 | `effort` | `'low' \| 'medium' \| 'high' \| 'max'` | -- | Effort level (supported by some models) |
-| `autoApprove` | `boolean` | -- | Skip tool confirmation prompts |
+| `autoApprove` | `boolean` | -- | Skip tool confirmation prompts. Maps to full permission/sandbox bypass on claude (`--dangerously-skip-permissions`) and codex (`--dangerously-bypass-approvals-and-sandbox`). No effect on opencode. |
 | `forkSession` | `boolean` | -- | Fork from an existing session |
 | `continueSession` | `boolean` | -- | Continue the most recent session |
 | `addDirs` | `string[]` | -- | Additional directories to include |
