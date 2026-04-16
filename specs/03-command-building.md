@@ -88,7 +88,7 @@ The base command depends on session state:
 | SpawnOption | Flag | Notes |
 |-------------|------|-------|
 | `model` | `--model <model>` | |
-| `autoApprove` | `--full-auto` | For unrestricted: use `extraArgs: ['--yolo']` |
+| `autoApprove` | `--dangerously-bypass-approvals-and-sandbox` | Full bypass (matches claude's `--dangerously-skip-permissions`). For sandboxed auto-approve: use `extraArgs: ['--full-auto']` |
 | `addDirs` | `--add-dir <dir>` (repeated) | |
 | `ephemeral` | `--ephemeral` | |
 | `effort` | `-c model_reasoning_effort=<effort>` | Config flag syntax |
