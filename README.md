@@ -15,17 +15,21 @@
   <a href="https://github.com/0xtiby/spawner/actions/workflows/release.yml"><img src="https://github.com/0xtiby/spawner/actions/workflows/release.yml/badge.svg" alt="CI status"></a>
 </p>
 
-## What It Does
+## What Is Spawner?
 
-Spawner gives you a single async iterable API to drive **Claude Code**, **Codex CLI**, and **OpenCode** programmatically. You pass `SpawnOptions`, iterate over typed `CliEvent` objects, and get back a structured `CliResult` -- regardless of which CLI you choose. It handles process spawning, JSONL stream parsing, session management, error classification, and CLI detection so you can build orchestrators, CI pipelines, and editor integrations without writing per-CLI adapters.
+A single async iterable API to drive **Claude Code**, **Codex CLI**, and **OpenCode** programmatically:
+
+1. You pass `SpawnOptions` to `spawn()`.
+2. You iterate typed `CliEvent` objects as they stream in (text, tool use, tool result, errors).
+3. You get back a structured `CliResult` -- same shape regardless of which CLI you chose.
+
+It handles process spawning, JSONL stream parsing, session management, error classification, and CLI detection so you can build orchestrators, CI pipelines, and editor integrations without writing per-CLI adapters.
 
 **ESM only. Zero runtime dependencies. TypeScript-first.**
 
-## Quick Start
+> Used by [**looper**](https://github.com/0xtiby/looper) as its CLI driver.
 
-```bash
-pnpm add @0xtiby/spawner
-```
+## Quick Start
 
 ```typescript
 import { spawn } from '@0xtiby/spawner';
@@ -57,21 +61,35 @@ for await (const event of proc.events) {
 
 ## Installation
 
-**Prerequisites**: Node.js 18+, pnpm (or npm/yarn)
+```bash
+pnpm add @0xtiby/spawner
+# or: npm install @0xtiby/spawner
+```
 
-You also need at least one supported CLI installed and authenticated:
+**Prerequisites**: Node.js 18+ and at least one supported CLI installed and authenticated:
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
 - [Codex CLI](https://github.com/openai/codex) (`codex`)
 - [OpenCode](https://github.com/sst/opencode) (`opencode`)
 
-```bash
-pnpm add @0xtiby/spawner
-# or
-npm install @0xtiby/spawner
-# or
-yarn add @0xtiby/spawner
-```
+## CLI Feature Parity
+
+Not every CLI supports every `SpawnOptions` field. This table shows what each adapter passes through and what it silently ignores.
+
+| Feature | Claude | Codex | OpenCode |
+|---|---|---|---|
+| `model` | Yes | Yes | Yes |
+| `sessionId` | Yes | Yes | Yes |
+| `continueSession` | Yes | Yes | Yes |
+| `forkSession` | Yes | Yes | Yes |
+| `autoApprove` | Yes | Yes | -- |
+| `effort` | Yes | Yes | -- |
+| `addDirs` | Yes | Yes | -- |
+| `ephemeral` | Yes | Yes | -- |
+| `allowInteractiveTools` | Yes | -- | -- |
+| `extraArgs` | Yes | Yes | Yes |
+
+**Legend:** "Yes" = passed to the CLI. "--" = silently ignored.
 
 ## Core Concepts
 
@@ -244,25 +262,6 @@ const models = await listModels({
 await refreshModels();
 ```
 
-## CLI Feature Parity
-
-Not every CLI supports every `SpawnOptions` field. This table shows what each adapter passes through and what it silently ignores.
-
-| Feature | Claude | Codex | OpenCode |
-|---|---|---|---|
-| `model` | Yes | Yes | Yes |
-| `sessionId` | Yes | Yes | Yes |
-| `continueSession` | Yes | Yes | Yes |
-| `forkSession` | Yes | Yes | Yes |
-| `autoApprove` | Yes | Yes | -- |
-| `effort` | Yes | Yes | -- |
-| `addDirs` | Yes | Yes | -- |
-| `ephemeral` | Yes | Yes | -- |
-| `allowInteractiveTools` | Yes | -- | -- |
-| `extraArgs` | Yes | Yes | Yes |
-
-**Legend:** "Yes" = passed to the CLI. "--" = silently ignored.
-
 ## API Reference
 
 ### `spawn(options: SpawnOptions): CliProcess`
@@ -423,27 +422,6 @@ Spawner uses an **adapter pattern** to normalize differences between CLIs. Each 
 - **`classifyError()`** -- CLI-specific error classification with fallback to shared patterns
 
 The `spawn()` function orchestrates the full lifecycle: adapter selection, child process spawning, readline-based stream parsing, event queuing via async iterable, accumulator tracking (session ID, token usage, model), and result construction on exit.
-
-```
-SpawnOptions
-    |
-    v
-[ Adapter Selection ] --> buildCommand() --> child_process.spawn()
-    |                                              |
-    |                                        stdout (JSONL)
-    |                                              |
-    v                                              v
-[ CLI Adapter ]                           [ Stream Parser ]
-  - parseLine()                              - readline
-  - classifyError()                          - accumulator
-                                                   |
-                                                   v
-                                          [ Event Queue ]
-                                        (AsyncIterable<CliEvent>)
-                                                   |
-                                                   v
-                                             Your Code
-```
 
 ## Examples
 
