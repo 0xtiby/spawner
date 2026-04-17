@@ -1,9 +1,19 @@
-# spawner
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/spawner-logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/spawner-logo-light.png">
+    <img alt="spawner" src="./assets/spawner-logo-light.png" height="140" style="margin-bottom: 20px;">
+  </picture>
+</div>
 
-> A unified TypeScript interface to spawn and interact with AI coding CLIs.
+<p align="center">A unified TypeScript interface to spawn and interact with AI coding CLIs.</p>
 
-[![npm version](https://img.shields.io/npm/v/@0xtiby/spawner)](https://www.npmjs.com/package/@0xtiby/spawner)
-[![license](https://img.shields.io/npm/l/@0xtiby/spawner)](./LICENSE)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@0xtiby/spawner"><img src="https://img.shields.io/npm/v/@0xtiby/spawner" alt="npm version"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/npm/l/@0xtiby/spawner" alt="license"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@0xtiby/spawner" alt="node engine"></a>
+  <a href="https://github.com/0xtiby/spawner/actions/workflows/release.yml"><img src="https://github.com/0xtiby/spawner/actions/workflows/release.yml/badge.svg" alt="CI status"></a>
+</p>
 
 ## What It Does
 
