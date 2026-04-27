@@ -1,0 +1,6 @@
+{"type":"session","id":"pi-sess-resume-xyz","model":"claude-sonnet-4-5"}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"assistant","model":"claude-sonnet-4-5"}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_end","content":"continuing"}}
+{"type":"turn_end","message":{"usage":{"input":150,"output":40,"cost":{"total":0.005}}}}

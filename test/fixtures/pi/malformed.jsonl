@@ -1,0 +1,4 @@
+this is not json
+{"type":"session","id":"pi-sess-malformed","model":"gpt-5"}
+{not valid json either
+plain text line

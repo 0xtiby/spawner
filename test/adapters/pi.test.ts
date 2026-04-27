@@ -1,9 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { piAdapter } from '../../src/adapters/pi.js';
 import { createAccumulator, type SessionAccumulator } from '../../src/adapters/types.js';
 
 function parseAll(lines: string[], acc: SessionAccumulator) {
   return lines.flatMap((line) => piAdapter.parseLine(line, acc));
+}
+
+function fixture(name: string): string[] {
+  const content = readFileSync(resolve(__dirname, '../fixtures/pi', name), 'utf-8');
+  return content.split('\n').filter((line) => line !== '');
 }
 
 describe('piAdapter shape', () => {
@@ -279,6 +286,109 @@ describe('piAdapter.parseLine', () => {
       expect(ev.raw.length).toBeGreaterThan(0);
       expect(typeof ev.timestamp).toBe('number');
     }
+  });
+});
+
+describe('piAdapter parseLine (fixture-based)', () => {
+  let acc: SessionAccumulator;
+
+  beforeEach(() => {
+    acc = createAccumulator();
+  });
+
+  describe('text-response.jsonl', () => {
+    it('captures session id and model from session event', () => {
+      const lines = fixture('text-response.jsonl');
+      parseAll(lines, acc);
+      expect(acc.sessionId).toBe('pi-sess-001');
+      expect(acc.model).toBe('gpt-5');
+    });
+
+    it('emits exactly one text event with the assistant content', () => {
+      const lines = fixture('text-response.jsonl');
+      const events = parseAll(lines, acc);
+      const textEvents = events.filter((e) => e.type === 'text');
+      expect(textEvents).toHaveLength(1);
+      expect(textEvents[0].content).toBe('Hello from pi!');
+    });
+
+    it('accumulates token usage and cost from message_end / turn_end', () => {
+      const lines = fixture('text-response.jsonl');
+      parseAll(lines, acc);
+      expect(acc.inputTokens).toBe(42);
+      expect(acc.outputTokens).toBe(12);
+      expect(acc.cost).toBe(0.0003);
+    });
+
+    it('all events have raw and timestamp fields', () => {
+      const lines = fixture('text-response.jsonl');
+      const events = parseAll(lines, acc);
+      for (const ev of events) {
+        expect(typeof ev.raw).toBe('string');
+        expect(ev.raw.length).toBeGreaterThan(0);
+        expect(typeof ev.timestamp).toBe('number');
+        expect(ev.timestamp).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe('tool-use.jsonl', () => {
+    it('emits a tool_use event with the correct name and input', () => {
+      const lines = fixture('tool-use.jsonl');
+      const events = parseAll(lines, acc);
+      const toolUses = events.filter((e) => e.type === 'tool_use');
+      expect(toolUses).toHaveLength(1);
+      expect(toolUses[0].tool).toEqual({
+        name: 'read_file',
+        input: { path: '/src/index.ts' },
+      });
+    });
+  });
+
+  describe('tool-result.jsonl', () => {
+    it('emits tool_result events with output and error fields', () => {
+      const lines = fixture('tool-result.jsonl');
+      const events = parseAll(lines, acc);
+      const toolResults = events.filter((e) => e.type === 'tool_result');
+      expect(toolResults).toHaveLength(2);
+      expect(toolResults[0].toolResult?.name).toBe('read_file');
+      expect(toolResults[0].toolResult?.output).toBe('file contents here');
+      expect(toolResults[0].toolResult?.error).toBeUndefined();
+      expect(toolResults[1].toolResult?.name).toBe('bash');
+      expect(toolResults[1].toolResult?.error).toBe('command failed');
+    });
+  });
+
+  describe('session-resume.jsonl', () => {
+    it('captures sessionId and model into the accumulator', () => {
+      const lines = fixture('session-resume.jsonl');
+      parseAll(lines, acc);
+      expect(acc.sessionId).toBe('pi-sess-resume-xyz');
+      expect(acc.model).toBe('claude-sonnet-4-5');
+    });
+  });
+
+  describe('error.jsonl', () => {
+    it('emits an error event from message_end stopReason=error', () => {
+      const lines = fixture('error.jsonl');
+      const events = parseAll(lines, acc);
+      const errors = events.filter((e) => e.type === 'error');
+      expect(errors).toHaveLength(1);
+      expect(errors[0].content).toBe('upstream provider error');
+    });
+  });
+
+  describe('malformed.jsonl', () => {
+    it('falls back to system events for non-JSON lines', () => {
+      const lines = fixture('malformed.jsonl');
+      const events = parseAll(lines, acc);
+      const systemEvents = events.filter((e) => e.type === 'system');
+      // Three of the four lines are non-JSON; the valid session line also emits a system event.
+      expect(systemEvents.length).toBeGreaterThanOrEqual(3);
+      const nonJsonContents = systemEvents.map((e) => e.content);
+      expect(nonJsonContents).toContain('this is not json');
+      expect(nonJsonContents).toContain('plain text line');
+    });
   });
 });
 
