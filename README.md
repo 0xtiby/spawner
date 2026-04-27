@@ -17,7 +17,7 @@
 
 ## What Is Spawner?
 
-A single async iterable API to drive **Claude Code**, **Codex CLI**, and **OpenCode** programmatically:
+A single async iterable API to drive **Claude Code**, **Codex CLI**, **OpenCode**, and **pi** programmatically:
 
 1. You pass `SpawnOptions` to `spawn()`.
 2. You iterate typed `CliEvent` objects as they stream in (text, tool use, tool result, errors).
@@ -71,25 +71,32 @@ pnpm add @0xtiby/spawner
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
 - [Codex CLI](https://github.com/openai/codex) (`codex`)
 - [OpenCode](https://github.com/sst/opencode) (`opencode`)
+- [pi](https://github.com/badlogic/pi-mono) (`pi`)
 
 ## CLI Feature Parity
 
 Not every CLI supports every `SpawnOptions` field. This table shows what each adapter passes through and what it silently ignores.
 
-| Feature | Claude | Codex | OpenCode |
-|---|---|---|---|
-| `model` | Yes | Yes | Yes |
-| `sessionId` | Yes | Yes | Yes |
-| `continueSession` | Yes | Yes | Yes |
-| `forkSession` | Yes | Yes | Yes |
-| `autoApprove` | Yes | Yes | -- |
-| `effort` | Yes | Yes | -- |
-| `addDirs` | Yes | Yes | -- |
-| `ephemeral` | Yes | Yes | -- |
-| `allowInteractiveTools` | Yes | -- | -- |
-| `extraArgs` | Yes | Yes | Yes |
+| Feature | Claude | Codex | OpenCode | pi |
+|---|---|---|---|---|
+| `model` | Yes | Yes | Yes | Yes |
+| `sessionId` | Yes | Yes | Yes | Yes |
+| `continueSession` | Yes | Yes | Yes | Yes |
+| `forkSession` | Yes | Yes | Yes | Yes |
+| `autoApprove` | Yes | Yes | -- | No-op |
+| `effort` | Yes | Yes | -- | Yes |
+| `addDirs` | Yes | Yes | -- | -- |
+| `ephemeral` | Yes | Yes | -- | Yes |
+| `allowInteractiveTools` | Yes | -- | -- | -- |
+| `extraArgs` | Yes | Yes | Yes | Yes |
 
-**Legend:** "Yes" = passed to the CLI. "--" = silently ignored.
+**Legend:** "Yes" = passed to the CLI. "--" = silently ignored. "No-op" = accepted but has no effect (the CLI is already non-interactive).
+
+### Pi-specific notes
+
+- `autoApprove` is a no-op: `pi --mode json` is already a headless print mode with no approval prompts.
+- `addDirs` and `allowInteractiveTools` are silently ignored so existing `SpawnOptions` work without crashing.
+- `effort` is mapped to `--thinking <level>`. `off` and `minimal` are dropped (pi has no equivalent); `max`/`xhigh` map to `xhigh`.
 
 ## Core Concepts
 
@@ -272,12 +279,12 @@ Spawns a CLI process and returns a handle for streaming events and awaiting the 
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `cli` | `CliName` | *required* | Which CLI to spawn: `'claude'`, `'codex'`, or `'opencode'` |
+| `cli` | `CliName` | *required* | Which CLI to spawn: `'claude'`, `'codex'`, `'opencode'`, or `'pi'` |
 | `prompt` | `string` | *required* | The prompt to send to the CLI |
 | `cwd` | `string` | *required* | Working directory for the process |
 | `model` | `string` | CLI default | Model identifier to use |
 | `sessionId` | `string` | -- | Resume an existing session |
-| `effort` | `'low' \| 'medium' \| 'high' \| 'max'` | -- | Effort level (supported by some models) |
+| `effort` | `'off' \| 'minimal' \| 'low' \| 'medium' \| 'high' \| 'max' \| 'xhigh'` | -- | Effort/reasoning level (supported by some models) |
 | `autoApprove` | `boolean` | -- | Skip tool confirmation prompts. Maps to full permission/sandbox bypass on claude (`--dangerously-skip-permissions`) and codex (`--dangerously-bypass-approvals-and-sandbox`). No effect on opencode. |
 | `forkSession` | `boolean` | -- | Fork from an existing session |
 | `continueSession` | `boolean` | -- | Continue the most recent session |
@@ -335,7 +342,7 @@ Checks whether a CLI is installed, its version, and authentication status.
 
 ### `detectAll(): Promise<Record<CliName, DetectResult>>`
 
-Runs `detect()` for all three CLIs concurrently.
+Runs `detect()` for all four CLIs concurrently.
 
 ### `extract(options: ExtractOptions): CliResult`
 
