@@ -9,6 +9,7 @@ export const CLI_PROVIDER_MAP: Record<CliName, string | null> = {
   claude: 'anthropic',
   codex: 'openai',
   opencode: null,
+  pi: null,
 };
 
 export async function listModels(options?: ListModelsOptions): Promise<KnownModel[]> {

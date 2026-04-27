@@ -51,8 +51,8 @@ afterEach(() => {
 });
 
 describe('CLI_PROVIDER_MAP', () => {
-  it('has entries for all three CliName values', () => {
-    expect(Object.keys(CLI_PROVIDER_MAP)).toEqual(['claude', 'codex', 'opencode']);
+  it('has entries for all CliName values', () => {
+    expect(Object.keys(CLI_PROVIDER_MAP)).toEqual(['claude', 'codex', 'opencode', 'pi']);
   });
 
   it('maps claude to anthropic', () => {

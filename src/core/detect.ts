@@ -62,11 +62,12 @@ export async function detect(cli: CliName): Promise<DetectResult> {
 }
 
 export async function detectAll(): Promise<Record<CliName, DetectResult>> {
-  const clis: CliName[] = ['claude', 'codex', 'opencode'];
+  const clis: CliName[] = ['claude', 'codex', 'opencode', 'pi'];
   const results = await Promise.all(clis.map((cli) => detect(cli)));
   return {
     claude: results[0],
     codex: results[1],
     opencode: results[2],
+    pi: results[3],
   };
 }
