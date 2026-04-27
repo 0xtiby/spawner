@@ -3,7 +3,7 @@ import { getAdapter } from './index.js';
 import type { CliName } from '../types.js';
 
 describe('getAdapter', () => {
-  const cliNames: CliName[] = ['claude', 'codex', 'opencode'];
+  const cliNames: CliName[] = ['claude', 'codex', 'opencode', 'pi'];
 
   for (const name of cliNames) {
     it(`returns adapter with name '${name}'`, () => {
@@ -57,5 +57,14 @@ describe('getAdapter', () => {
     expect(result.bin).toBe('opencode');
     expect(result.args).toContain('run');
     expect(result.stdinInput).toBe('hi');
+  });
+
+  it('pi adapter buildCommand returns valid command', () => {
+    const adapter = getAdapter('pi');
+    const result = adapter.buildCommand({ cli: 'pi', prompt: 'hi', cwd: '/tmp' });
+    expect(result.bin).toBe('pi');
+    expect(result.args).toContain('--mode');
+    expect(result.args).toContain('json');
+    expect(result.args).toContain('hi');
   });
 });

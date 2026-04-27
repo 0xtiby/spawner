@@ -66,6 +66,10 @@ describe('CLI_PROVIDER_MAP', () => {
   it('maps opencode to null', () => {
     expect(CLI_PROVIDER_MAP.opencode).toBeNull();
   });
+
+  it('maps pi to null (provider-agnostic)', () => {
+    expect(CLI_PROVIDER_MAP.pi).toBeNull();
+  });
 });
 
 describe('listModels', () => {
@@ -90,6 +94,14 @@ describe('listModels', () => {
     const models = await listModels({ cli: 'codex' });
     expect(models.every(m => m.provider === 'openai')).toBe(true);
     expect(models.length).toBe(1);
+  });
+
+  it('cli=pi returns all models.dev models (provider-agnostic)', async () => {
+    mockFetchSuccess();
+    const models = await listModels({ cli: 'pi' });
+    expect(models.length).toBe(4); // all providers, no filter
+    const providers = new Set(models.map(m => m.provider));
+    expect(providers.size).toBeGreaterThan(1);
   });
 
   it('routes cli=opencode to CLI discovery (not models.dev)', async () => {
