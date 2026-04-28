@@ -204,7 +204,7 @@ describe('piAdapter.parseLine', () => {
     expect(events[0].toolResult?.error).toBe('boom');
   });
 
-  it('message_end accumulates token usage and cost', () => {
+  it('message_end does not accumulate usage (turn_end is the source of truth)', () => {
     const line = JSON.stringify({
       type: 'message_end',
       message: {
@@ -213,9 +213,25 @@ describe('piAdapter.parseLine', () => {
       },
     });
     piAdapter.parseLine(line, acc);
-    expect(acc.inputTokens).toBe(100);
-    expect(acc.outputTokens).toBe(50);
-    expect(acc.cost).toBe(0.0042);
+    expect(acc.inputTokens).toBe(0);
+    expect(acc.outputTokens).toBe(0);
+    expect(acc.cost).toBeNull();
+  });
+
+  it('turn_end accumulates across multiple turns (per-turn semantics)', () => {
+    const turn1 = JSON.stringify({
+      type: 'turn_end',
+      message: { usage: { input: 16, output: 38, cost: { total: 0.0001 } } },
+    });
+    const turn2 = JSON.stringify({
+      type: 'turn_end',
+      message: { usage: { input: 40, output: 29, cost: { total: 0.0003 } } },
+    });
+    piAdapter.parseLine(turn1, acc);
+    piAdapter.parseLine(turn2, acc);
+    expect(acc.inputTokens).toBe(56);
+    expect(acc.outputTokens).toBe(67);
+    expect(acc.cost).toBeCloseTo(0.0004, 6);
   });
 
   it('message_end with stopReason=error emits error event', () => {
@@ -312,7 +328,7 @@ describe('piAdapter parseLine (fixture-based)', () => {
       expect(textEvents[0].content).toBe('Hello from pi!');
     });
 
-    it('accumulates token usage and cost from message_end / turn_end', () => {
+    it('accumulates token usage and cost from turn_end', () => {
       const lines = fixture('text-response.jsonl');
       parseAll(lines, acc);
       expect(acc.inputTokens).toBe(42);

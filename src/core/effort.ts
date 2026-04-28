@@ -23,5 +23,9 @@ export function mapEffortToCliFlag(cli: CliName, effort: EffortLevel): EffortFla
     }
     case 'opencode':
       return null;
+    default: {
+      const _exhaustive: never = cli;
+      return _exhaustive;
+    }
   }
 }

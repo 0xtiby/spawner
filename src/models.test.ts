@@ -52,7 +52,9 @@ afterEach(() => {
 
 describe('CLI_PROVIDER_MAP', () => {
   it('has entries for all CliName values', () => {
-    expect(Object.keys(CLI_PROVIDER_MAP)).toEqual(['claude', 'codex', 'opencode', 'pi']);
+    const keys = Object.keys(CLI_PROVIDER_MAP);
+    expect(keys).toHaveLength(4);
+    expect(keys).toEqual(expect.arrayContaining(['claude', 'codex', 'opencode', 'pi']));
   });
 
   it('maps claude to anthropic', () => {

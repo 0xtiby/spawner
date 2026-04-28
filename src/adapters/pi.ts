@@ -5,8 +5,20 @@ import type { ExecResult } from '../core/detect.js';
 import { classifyErrorDefault } from '../core/errors.js';
 import { mapEffortToCliFlag } from '../core/effort.js';
 
+const UNKNOWN_ERROR = 'unknown error';
+const UNKNOWN_TOOL = 'unknown';
+const TOOL_FAILURE_FALLBACK = 'tool execution failed';
+
 function isExecResult(result: Awaited<ReturnType<typeof execCommand>>): result is ExecResult {
   return 'exitCode' in result;
+}
+
+function asString(v: unknown): string | null {
+  return typeof v === 'string' ? v : null;
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
 export const piAdapter: CliAdapter = {
@@ -86,14 +98,17 @@ export const piAdapter: CliAdapter = {
 
     switch (json.type) {
       case 'session': {
-        const sessionId = (json.id as string) ?? null;
-        const model = (json.model as string) ?? null;
+        const sessionId = asString(json.id);
+        const model = asString(json.model);
         if (sessionId) accumulator.sessionId = sessionId;
         if (model) accumulator.model = model;
         const parts: string[] = [];
         if (sessionId) parts.push(`session=${sessionId}`);
         if (model) parts.push(`model=${model}`);
-        return [{ type: 'system', content: parts.join(', ') || 'session', timestamp: now, raw: line }];
+        // If neither id nor model are present the event carries no useful state
+        // for downstream consumers — drop it rather than emit a placeholder.
+        if (parts.length === 0) return [];
+        return [{ type: 'system', content: parts.join(', '), timestamp: now, raw: line }];
       }
 
       case 'agent_start':
@@ -103,33 +118,35 @@ export const piAdapter: CliAdapter = {
         return [{ type: 'system', content: 'turn_start', timestamp: now, raw: line }];
 
       case 'message_start': {
-        const message = json.message as Record<string, unknown> | undefined;
+        // Pi can switch models mid-session via --models cycling, so we refresh
+        // accumulator.model here in addition to the initial `session` event.
+        const message = asRecord(json.message);
         if (message?.role === 'assistant') {
-          const model = (message.model as string) ?? null;
+          const model = asString(message.model);
           if (model) accumulator.model = model;
         }
         return [];
       }
 
       case 'message_update': {
-        const assistantEvent = json.assistantMessageEvent as Record<string, unknown> | undefined;
+        const assistantEvent = asRecord(json.assistantMessageEvent);
         if (!assistantEvent) return [];
 
-        const eventType = assistantEvent.type as string;
+        const eventType = asString(assistantEvent.type);
 
         if (eventType === 'text_end') {
-          const content = assistantEvent.content as string;
+          const content = asString(assistantEvent.content);
           return [{ type: 'text', content: content ?? '', timestamp: now, raw: line }];
         }
 
         if (eventType === 'toolcall_end') {
-          const toolCall = assistantEvent.toolCall as Record<string, unknown> | undefined;
+          const toolCall = asRecord(assistantEvent.toolCall);
           if (toolCall) {
             return [{
               type: 'tool_use',
               tool: {
-                name: (toolCall.name as string) ?? 'unknown',
-                input: (toolCall.arguments as Record<string, unknown>) ?? {},
+                name: asString(toolCall.name) ?? UNKNOWN_TOOL,
+                input: asRecord(toolCall.arguments) ?? {},
               },
               timestamp: now,
               raw: line,
@@ -138,8 +155,8 @@ export const piAdapter: CliAdapter = {
         }
 
         if (eventType === 'error') {
-          const errObj = assistantEvent.error as Record<string, unknown> | undefined;
-          const errorMsg = (errObj?.errorMessage as string) ?? 'unknown error';
+          const errObj = asRecord(assistantEvent.error);
+          const errorMsg = asString(errObj?.errorMessage) ?? UNKNOWN_ERROR;
           return [{ type: 'error', content: errorMsg, timestamp: now, raw: line }];
         }
 
@@ -149,46 +166,43 @@ export const piAdapter: CliAdapter = {
       }
 
       case 'message_end': {
-        const message = json.message as Record<string, unknown> | undefined;
+        // Usage is intentionally ignored here — pi emits the same usage block
+        // again in turn_end, and may emit multiple message_end events per turn
+        // (some with null usage). We accumulate only at turn_end to have a
+        // single source of truth that works correctly across multi-turn sessions.
+        const message = asRecord(json.message);
         if (message?.role === 'assistant') {
-          const usage = message.usage as Record<string, unknown> | undefined;
-          if (usage) {
-            const input = usage.input as number | undefined;
-            const output = usage.output as number | undefined;
-            if (typeof input === 'number') accumulator.inputTokens = input;
-            if (typeof output === 'number') accumulator.outputTokens = output;
-            const cost = (usage.cost as Record<string, unknown> | undefined)?.total as number | undefined;
-            if (typeof cost === 'number') accumulator.cost = cost;
-          }
-
-          const stopReason = message.stopReason as string | undefined;
+          const stopReason = asString(message.stopReason);
           if (stopReason === 'error' || stopReason === 'aborted') {
-            const errorMessage = (message.errorMessage as string) ?? `Request ${stopReason}`;
+            const errorMessage = asString(message.errorMessage) ?? `Request ${stopReason}`;
             return [{ type: 'error', content: errorMessage, timestamp: now, raw: line }];
           }
         }
         return [];
       }
 
+      // Skipped — tool_execution_end carries the final result we surface.
       case 'tool_execution_start':
       case 'tool_execution_update':
         return [];
 
       case 'tool_execution_end': {
-        const toolCallId = json.toolCallId as string | undefined;
-        const toolName = json.toolName as string | undefined;
-        const result = json.result as Record<string, unknown> | undefined;
-        const isError = json.isError as boolean | undefined;
+        const toolName = asString(json.toolName);
+        const result = asRecord(json.result);
+        const isError = json.isError === true;
 
-        const content = result?.content as Array<Record<string, unknown>> | undefined;
-        const text = (content?.find((c) => c.type === 'text')?.text as string) ?? '';
+        const content = Array.isArray(result?.content) ? (result.content as Array<Record<string, unknown>>) : undefined;
+        const text = asString(content?.find((c) => c.type === 'text')?.text) ?? '';
 
+        // When isError is true, pi exposes the failure text only via result.content,
+        // so we surface the same string in both `output` (raw payload) and `error`
+        // (failure marker). Consumers should branch on `error` being defined.
         return [{
           type: 'tool_result',
           toolResult: {
-            name: toolName ?? toolCallId ?? 'unknown',
+            name: toolName ?? UNKNOWN_TOOL,
             output: text,
-            error: isError ? text || 'tool execution failed' : undefined,
+            error: isError ? text || TOOL_FAILURE_FALLBACK : undefined,
           },
           timestamp: now,
           raw: line,
@@ -196,24 +210,27 @@ export const piAdapter: CliAdapter = {
       }
 
       case 'turn_end': {
-        const message = json.message as Record<string, unknown> | undefined;
+        const message = asRecord(json.message);
         if (message) {
-          const model = (message.model as string) ?? null;
+          const model = asString(message.model);
           if (model) accumulator.model = model;
 
-          const usage = message.usage as Record<string, unknown> | undefined;
+          // pi reports per-turn usage (verified empirically across two-turn
+          // sessions), so we accumulate to track session totals — matching
+          // claude/codex semantics.
+          const usage = asRecord(message.usage);
           if (usage) {
-            const input = usage.input as number | undefined;
-            const output = usage.output as number | undefined;
-            if (typeof input === 'number') accumulator.inputTokens = input;
-            if (typeof output === 'number') accumulator.outputTokens = output;
-            const cost = (usage.cost as Record<string, unknown> | undefined)?.total as number | undefined;
-            if (typeof cost === 'number') accumulator.cost = cost;
+            const input = usage.input;
+            const output = usage.output;
+            if (typeof input === 'number') accumulator.inputTokens += input;
+            if (typeof output === 'number') accumulator.outputTokens += output;
+            const cost = asRecord(usage.cost)?.total;
+            if (typeof cost === 'number') accumulator.cost = (accumulator.cost ?? 0) + cost;
           }
 
-          const stopReason = message.stopReason as string | undefined;
+          const stopReason = asString(message.stopReason);
           if (stopReason === 'error' || stopReason === 'aborted') {
-            const errorMessage = (message.errorMessage as string) ?? `Request ${stopReason}`;
+            const errorMessage = asString(message.errorMessage) ?? `Request ${stopReason}`;
             return [{ type: 'error', content: errorMessage, timestamp: now, raw: line }];
           }
         }
@@ -229,27 +246,20 @@ export const piAdapter: CliAdapter = {
   },
 
   classifyError(exitCode: number, stderr: string, stdout: string): CliError {
-    const combined = stderr + '\n' + stdout;
-    const raw = stderr + (stdout ? '\n' + stdout : '');
+    const raw = [stderr, stdout].filter(Boolean).join('\n');
 
-    if (/model.*not found|not found.*model|unknown model/i.test(combined)) {
-      const matchedLine = combined.split('\n').find((l) => /model.*not found|not found.*model|unknown model/i.test(l))?.trim() || 'Model not found';
-      return { code: 'model_not_found', message: matchedLine, retryable: false, retryAfterMs: null, raw };
-    }
+    const PATTERNS = [
+      { code: 'model_not_found' as const, regex: /model.*not found|not found.*model|unknown model/i, retryable: false, fallback: 'Model not found' },
+      { code: 'auth' as const,            regex: /api key|unauthorized|authentication/i,             retryable: false, fallback: 'Authentication required' },
+      { code: 'rate_limit' as const,      regex: /rate limit|too many requests|ratelimit/i,          retryable: true,  fallback: 'Rate limited' },
+      { code: 'context_overflow' as const,regex: /context.*length|too long|token limit|maximum context|context window/i, retryable: false, fallback: 'Context overflow' },
+    ];
 
-    if (/api key|unauthorized|authentication/i.test(combined)) {
-      const matchedLine = combined.split('\n').find((l) => /api key|unauthorized|authentication/i.test(l))?.trim() || 'Authentication required';
-      return { code: 'auth', message: matchedLine, retryable: false, retryAfterMs: null, raw };
-    }
-
-    if (/rate limit|too many requests|ratelimit/i.test(combined)) {
-      const matchedLine = combined.split('\n').find((l) => /rate limit|too many requests|ratelimit/i.test(l))?.trim() || 'Rate limited';
-      return { code: 'rate_limit', message: matchedLine, retryable: true, retryAfterMs: null, raw };
-    }
-
-    if (/context.*length|too long|token limit|maximum context|context window/i.test(combined)) {
-      const matchedLine = combined.split('\n').find((l) => /context.*length|too long|token limit|maximum context|context window/i.test(l))?.trim() || 'Context overflow';
-      return { code: 'context_overflow', message: matchedLine, retryable: false, retryAfterMs: null, raw };
+    for (const { code, regex, retryable, fallback } of PATTERNS) {
+      const matchedLine = raw.split('\n').find((l) => regex.test(l))?.trim();
+      if (matchedLine !== undefined) {
+        return { code, message: matchedLine || fallback, retryable, retryAfterMs: null, raw };
+      }
     }
 
     return classifyErrorDefault(exitCode, stderr, stdout);

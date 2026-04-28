@@ -96,7 +96,8 @@ Not every CLI supports every `SpawnOptions` field. This table shows what each ad
 
 - `autoApprove` is a no-op: `pi --mode json` is already a headless print mode with no approval prompts.
 - `addDirs` and `allowInteractiveTools` are silently ignored so existing `SpawnOptions` work without crashing.
-- `effort` is mapped to `--thinking <level>`. `off` and `minimal` are dropped (pi has no equivalent); `max`/`xhigh` map to `xhigh`.
+- `effort` is mapped to `--thinking <level>`. Pi accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh` natively, so all values pass through; `max` collapses to `xhigh`.
+- `detect()` reports `authenticated: true` whenever the `pi` binary exists. Pi resolves credentials per provider at runtime (env vars, config file), so this signal is non-authoritative — real auth failures surface via `classifyError` when you actually spawn.
 
 ## Core Concepts
 

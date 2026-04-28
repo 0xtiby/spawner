@@ -90,7 +90,7 @@ Pattern-matches stderr/stdout against pi-specific regexes; otherwise delegates t
 | Fork from a known session | `--fork <id>` (strips `--session`/`--continue`) |
 | Run ephemerally | `--no-session` |
 
-`forkSession` only takes effect when `sessionId` is set; `--fork` requires an explicit identifier.
+`forkSession` only takes effect when `sessionId` is set; `--fork` requires an explicit identifier. Calling `forkSession: true` without a `sessionId` is a no-op (no `--fork` argument is emitted).
 
 ---
 
@@ -100,8 +100,8 @@ Pattern-matches stderr/stdout against pi-specific regexes; otherwise delegates t
 
 | `EffortLevel` | Pi flag |
 |---|---|
-| `off` | -- (dropped) |
-| `minimal` | -- (dropped) |
+| `off` | `--thinking off` |
+| `minimal` | `--thinking minimal` |
 | `low` | `--thinking low` |
 | `medium` | `--thinking medium` |
 | `high` | `--thinking high` |
@@ -136,6 +136,6 @@ The `matchedLine` is the first stderr/stdout line that triggered the regex, trim
   - Error path: `stopReason: error` emits a `CliEvent` of type `error`
 - **`buildCommand` tests**: assert flag composition for every `SpawnOptions` field combination, including `forkSession` precedence over `--session`/`--continue`.
 - **`classifyError` tests**: each regex row exercised with a representative stderr/stdout line.
-- **Effort mapping tests**: parametrized `(cli, effort) → flag` table including `off`/`minimal` drop and `max`/`xhigh` collapse.
+- **Effort mapping tests**: parametrized `(cli, effort) → flag` table including `off`/`minimal` drop (claude/codex) vs pass-through (pi) and `max`/`xhigh` collapse.
 - **Adapter registry test** (`src/adapters/index.test.ts`): `getAdapter('pi')` returns the pi adapter with all required methods.
 - **E2E** (`test/e2e.test.ts`): `pi` is included in `CLI_NAMES`; spawn/listModels/session-continuity tests run when pi is installed and authenticated, otherwise skipped.
