@@ -3,6 +3,7 @@ import type { CliAdapter, SessionAccumulator } from './types.js';
 import { execCommand } from '../core/detect.js';
 import type { ExecResult } from '../core/detect.js';
 import { classifyErrorDefault } from '../core/errors.js';
+import { mapEffortToCliFlag } from '../core/effort.js';
 
 function isExecResult(result: Awaited<ReturnType<typeof execCommand>>): result is ExecResult {
   return 'exitCode' in result;
@@ -67,7 +68,8 @@ export const codexAdapter: CliAdapter = {
     }
 
     if (options.effort) {
-      args.push('-c', `model_reasoning_effort=${options.effort}`);
+      const mapped = mapEffortToCliFlag('codex', options.effort);
+      if (mapped) args.push(mapped.flag, mapped.value);
     }
 
     if (options.extraArgs) {

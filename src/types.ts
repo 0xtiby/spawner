@@ -1,6 +1,8 @@
 // --- Union types ---
 
-export type CliName = 'claude' | 'codex' | 'opencode';
+export type CliName = 'claude' | 'codex' | 'opencode' | 'pi';
+
+export type EffortLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'max' | 'xhigh';
 
 export type CliEventType =
   | 'text'
@@ -29,7 +31,7 @@ export interface SpawnOptions {
   cwd: string;
   model?: string;
   sessionId?: string;
-  effort?: 'low' | 'medium' | 'high' | 'max';
+  effort?: EffortLevel;
   autoApprove?: boolean;
   forkSession?: boolean;
   continueSession?: boolean;

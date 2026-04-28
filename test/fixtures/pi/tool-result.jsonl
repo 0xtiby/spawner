@@ -1,0 +1,5 @@
+{"type":"session","id":"pi-sess-tools","model":"gpt-5"}
+{"type":"tool_execution_start","toolCallId":"tc-1","toolName":"read_file"}
+{"type":"tool_execution_end","toolCallId":"tc-1","toolName":"read_file","result":{"content":[{"type":"text","text":"file contents here"}]},"isError":false}
+{"type":"tool_execution_start","toolCallId":"tc-2","toolName":"bash"}
+{"type":"tool_execution_end","toolCallId":"tc-2","toolName":"bash","result":{"content":[{"type":"text","text":"command failed"}]},"isError":true}

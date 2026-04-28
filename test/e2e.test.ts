@@ -25,7 +25,7 @@ import type { CliName, CliEvent, DetectResult } from '../src/index.js';
 // Shared state — resolved at module level so describe.skipIf can use it
 // ---------------------------------------------------------------------------
 
-const CLI_NAMES: CliName[] = ['claude', 'codex', 'opencode'];
+const CLI_NAMES: CliName[] = ['claude', 'codex', 'opencode', 'pi'];
 const installed = await detectAll();
 
 async function collectEvents(iter: AsyncIterable<CliEvent>): Promise<CliEvent[]> {

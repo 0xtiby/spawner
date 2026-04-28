@@ -51,8 +51,10 @@ afterEach(() => {
 });
 
 describe('CLI_PROVIDER_MAP', () => {
-  it('has entries for all three CliName values', () => {
-    expect(Object.keys(CLI_PROVIDER_MAP)).toEqual(['claude', 'codex', 'opencode']);
+  it('has entries for all CliName values', () => {
+    const keys = Object.keys(CLI_PROVIDER_MAP);
+    expect(keys).toHaveLength(4);
+    expect(keys).toEqual(expect.arrayContaining(['claude', 'codex', 'opencode', 'pi']));
   });
 
   it('maps claude to anthropic', () => {
@@ -65,6 +67,10 @@ describe('CLI_PROVIDER_MAP', () => {
 
   it('maps opencode to null', () => {
     expect(CLI_PROVIDER_MAP.opencode).toBeNull();
+  });
+
+  it('maps pi to null (provider-agnostic)', () => {
+    expect(CLI_PROVIDER_MAP.pi).toBeNull();
   });
 });
 
@@ -90,6 +96,14 @@ describe('listModels', () => {
     const models = await listModels({ cli: 'codex' });
     expect(models.every(m => m.provider === 'openai')).toBe(true);
     expect(models.length).toBe(1);
+  });
+
+  it('cli=pi returns all models.dev models (provider-agnostic)', async () => {
+    mockFetchSuccess();
+    const models = await listModels({ cli: 'pi' });
+    expect(models.length).toBe(4); // all providers, no filter
+    const providers = new Set(models.map(m => m.provider));
+    expect(providers.size).toBeGreaterThan(1);
   });
 
   it('routes cli=opencode to CLI discovery (not models.dev)', async () => {

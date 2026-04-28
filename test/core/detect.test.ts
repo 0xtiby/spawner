@@ -132,8 +132,36 @@ describe('detect (mocked child_process)', () => {
     });
   });
 
+  describe('pi', () => {
+    it("detect('pi') returns installed: false when version check gets ENOENT", async () => {
+      mockQueue.push(createEnoentProcess());
+
+      const result = await detect('pi');
+
+      expect(result).toEqual({
+        installed: false,
+        version: null,
+        authenticated: false,
+        binaryPath: null,
+      });
+    });
+
+    it("detect('pi') reports authenticated: true optimistically when binary is present", async () => {
+      mockQueue.push(createMockProcess({ stdoutLines: ['pi 0.1.0'], exitCode: 0 }));
+
+      const result = await detect('pi');
+
+      expect(result).toEqual({
+        installed: true,
+        version: 'pi 0.1.0',
+        authenticated: true,
+        binaryPath: 'pi',
+      });
+    });
+  });
+
   describe('detectAll', () => {
-    it('checks all three CLIs concurrently, returns Record', async () => {
+    it('checks all four CLIs concurrently, returns Record with claude, codex, opencode, pi', async () => {
       // Route mock processes by binary name + args (concurrent calls make queue order unpredictable)
       const { spawn: mockSpawn } = await import('node:child_process');
       const spawnFn = vi.mocked(mockSpawn);
@@ -149,12 +177,18 @@ describe('detect (mocked child_process)', () => {
           if (isVersion) return createEnoentProcess() as any;
           return createMockProcess({ stdoutLines: [], exitCode: 1 }) as any; // shouldn't reach
         }
+        if (bin === 'pi') {
+          // pi only runs version check (optimistic auth)
+          return createMockProcess({ stdoutLines: ['pi 0.1.0'], exitCode: 0 }) as any;
+        }
         // opencode
         if (isVersion) return createMockProcess({ stdoutLines: ['opencode v0.5.0'], exitCode: 0 }) as any;
         return createMockProcess({ stdoutLines: [], exitCode: 1 }) as any; // auth fails
       });
 
       const results = await detectAll();
+
+      expect(Object.keys(results).sort()).toEqual(['claude', 'codex', 'opencode', 'pi']);
 
       expect(results.claude).toEqual({
         installed: true,
@@ -175,6 +209,13 @@ describe('detect (mocked child_process)', () => {
         version: 'opencode v0.5.0',
         authenticated: false,
         binaryPath: 'opencode',
+      });
+
+      expect(results.pi).toEqual({
+        installed: true,
+        version: 'pi 0.1.0',
+        authenticated: true,
+        binaryPath: 'pi',
       });
     });
   });
