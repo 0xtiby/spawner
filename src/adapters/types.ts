@@ -14,6 +14,8 @@ export interface SessionAccumulator {
   inputTokens: number;
   outputTokens: number;
   cost: number | null;
+  /** Adapter-specific flag used by pi to suppress duplicate text_end content after streamed deltas. */
+  piTextDeltaSeen?: boolean;
 }
 
 export function createAccumulator(): SessionAccumulator {

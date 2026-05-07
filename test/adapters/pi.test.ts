@@ -152,7 +152,7 @@ describe('piAdapter.parseLine', () => {
     expect(events[0].type).toBe('system');
   });
 
-  it('message_update with text_end emits text event', () => {
+  it('message_update with text_end emits text event when no deltas were streamed', () => {
     const line = JSON.stringify({
       type: 'message_update',
       assistantMessageEvent: { type: 'text_end', content: 'Hello world' },
@@ -161,6 +161,41 @@ describe('piAdapter.parseLine', () => {
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('text');
     expect(events[0].content).toBe('Hello world');
+  });
+
+  it('message_update with text_delta emits incremental text event', () => {
+    const line = JSON.stringify({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'Hello' },
+    });
+    const events = piAdapter.parseLine(line, acc);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('text');
+    expect(events[0].content).toBe('Hello');
+  });
+
+  it('skips duplicate text_end content after streamed text_delta events', () => {
+    const lines = [
+      JSON.stringify({ type: 'message_start', message: { role: 'assistant', model: 'gpt-5' } }),
+      JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_start' } }),
+      JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Hello' } }),
+      JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: ' world' } }),
+      JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_end', content: 'Hello world' } }),
+    ];
+    const events = parseAll(lines, acc).filter((event) => event.type === 'text');
+    expect(events.map((event) => event.content)).toEqual(['Hello', ' world']);
+  });
+
+  it('resets streamed text tracking for a later non-streamed assistant message', () => {
+    const lines = [
+      JSON.stringify({ type: 'message_start', message: { role: 'assistant' } }),
+      JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'streamed' } }),
+      JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_end', content: 'streamed' } }),
+      JSON.stringify({ type: 'message_start', message: { role: 'assistant' } }),
+      JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_end', content: 'fallback' } }),
+    ];
+    const events = parseAll(lines, acc).filter((event) => event.type === 'text');
+    expect(events.map((event) => event.content)).toEqual(['streamed', 'fallback']);
   });
 
   it('message_update with toolcall_end emits tool_use event', () => {
