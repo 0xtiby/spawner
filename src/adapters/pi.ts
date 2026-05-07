@@ -124,6 +124,7 @@ export const piAdapter: CliAdapter = {
         if (message?.role === 'assistant') {
           const model = asString(message.model);
           if (model) accumulator.model = model;
+          accumulator.piTextDeltaSeen = false;
         }
         return [];
       }
@@ -134,7 +135,19 @@ export const piAdapter: CliAdapter = {
 
         const eventType = asString(assistantEvent.type);
 
+        if (eventType === 'text_start') {
+          accumulator.piTextDeltaSeen = false;
+          return [];
+        }
+
+        if (eventType === 'text_delta') {
+          accumulator.piTextDeltaSeen = true;
+          const delta = asString(assistantEvent.delta);
+          return [{ type: 'text', content: delta ?? '', timestamp: now, raw: line }];
+        }
+
         if (eventType === 'text_end') {
+          if (accumulator.piTextDeltaSeen) return [];
           const content = asString(assistantEvent.content);
           return [{ type: 'text', content: content ?? '', timestamp: now, raw: line }];
         }
